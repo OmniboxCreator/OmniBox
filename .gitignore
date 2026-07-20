@@ -1,0 +1,17 @@
+build/
+extern/
+*.elf
+*.bin
+*.hex
+*.map
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.pyc
+__pycache__/
+*.log
+*.tmp
+.DS_Store

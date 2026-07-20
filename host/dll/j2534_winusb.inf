@@ -1,0 +1,40 @@
+; j2534_winusb.inf - binds WinUSB to the OmniBox J2534 vendor interface.
+; The firmware also exposes WCID/MS OS 2.0 descriptors for automatic WinUSB
+; binding on recent Windows versions. This INF is a fallback for older systems
+; or manual driver installation.
+;
+; The DeviceInterfaceGUID must match transport_winusb.c.
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=USBDevice
+ClassGuid={88bae032-5a81-49f0-bc3d-a4ff138216d6}
+Provider=%ProviderName%
+DriverVer=07/20/2026,1.0.0.0
+
+[Manufacturer]
+%ProviderName%=Standard,NTamd64,NTx86
+
+[Standard.NTamd64]
+%DeviceName%=Install, USB\VID_1209&PID_5334&MI_00
+
+[Standard.NTx86]
+%DeviceName%=Install, USB\VID_1209&PID_5334&MI_00
+
+[Install]
+Include=winusb.inf
+Needs=WINUSB.NT
+
+[Install.Services]
+Include=winusb.inf
+Needs=WINUSB.NT.Services
+
+[Install.HW]
+AddReg=DeviceInterfaceGUIDs
+
+[DeviceInterfaceGUIDs]
+HKR,,DeviceInterfaceGUIDs,0x10000,"{B7B3B4E0-1209-5334-9A11-0E1D2C3B4A50}"
+
+[Strings]
+ProviderName="OmniBox"
+DeviceName="OmniBox J2534 Interface"

@@ -1,0 +1,5 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "j2534_local")(type "KiCad")(uri "${KIPRJMOD}/sym-lib/j2534_local.kicad_sym")(options "")(descr "Project-specific symbols"))
+	(lib (name "j2534gen")(type "KiCad")(uri "${KIPRJMOD}/sym-lib/j2534gen.kicad_sym")(options "")(descr "Auto-generated schematic symbols"))
+)
