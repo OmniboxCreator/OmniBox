@@ -1,0 +1,99 @@
+name: Firmware release
+
+on:
+  push:
+    tags:
+      - "firmware-v*"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Firmware release tag to build and update"
+        required: true
+        default: "firmware-v0.1-dev"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'firmware-v')
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.release_tag }}"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ "${tag}" != firmware-v* ]]; then
+            echo "Unsupported firmware tag: ${tag}" >&2
+            exit 1
+          fi
+
+          version="${tag#firmware-v}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          submodules: false
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-none-eabi \
+            binutils-arm-none-eabi \
+            cmake \
+            ninja-build
+
+      - name: Configure firmware
+        run: |
+          cmake -S firmware -B firmware/build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/arm-gcc.cmake \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build firmware
+        run: cmake --build firmware/build
+
+      - name: Package firmware source
+        run: |
+          git archive \
+            --format=zip \
+            --output="firmware/build/omnibox-firmware-${{ steps.release.outputs.version }}-source.zip" \
+            HEAD firmware
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnibox-firmware-${{ steps.release.outputs.version }}
+          path: |
+            firmware/build/firmware.elf
+            firmware/build/firmware.bin
+            firmware/build/firmware.hex
+            firmware/build/firmware.map
+            firmware/build/omnibox-firmware-${{ steps.release.outputs.version }}-source.zip
+
+      - name: Attach firmware files to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ steps.release.outputs.tag }}" \
+            "firmware/build/firmware.elf#omnibox-firmware-${{ steps.release.outputs.version }}.elf" \
+            "firmware/build/firmware.bin#omnibox-firmware-${{ steps.release.outputs.version }}.bin" \
+            "firmware/build/firmware.hex#omnibox-firmware-${{ steps.release.outputs.version }}.hex" \
+            "firmware/build/firmware.map#omnibox-firmware-${{ steps.release.outputs.version }}.map" \
+            "firmware/build/omnibox-firmware-${{ steps.release.outputs.version }}-source.zip" \
+            --repo "${{ github.repository }}" \
+            --clobber
