@@ -1,233 +1,182 @@
+<div align="center">
+
 # OmniBox
 
-OmniBox is a public non-commercial USB-to-OBD hardware and firmware project for
-automotive diagnostics, protocol research and bench ECU work.
+**A public non-commercial ECU diagnostics and reprogramming interface platform**
 
-The goal of the V1 board is to provide a serious, inspectable and reproducible
-interface platform: KiCad sources, schematic, PCB, BOM, manufacturing outputs,
-enclosure files, firmware and host-side tools are published so the design can be
-reviewed, built, improved and tested by the community.
+OmniBox V1 is a KiCad-based USB-to-OBD and bench ECU interface designed for
+serious diagnostic, protocol research and ECU reprogramming workflows.
 
-OmniBox is not a minimal USB-to-CAN adapter. It is designed as a wider vehicle
-interface board with galvanic isolation, protected vehicle-side power,
-multi-channel CAN/CAN-FD, K-line, J1850/SWCAN hardware stages, programmable
-FEPS generation, measurement feedback and a routable OBD pin matrix.
+![OmniBox V1 board render](docs/images/omnibox-v1-board-iso-complete.png)
 
-## Release Status
+[![Board](https://img.shields.io/badge/board-1.0%20beta-black)](https://github.com/proxynet2017/OmniBox/releases/tag/hardware-v1.0-beta)
+[![Firmware](https://img.shields.io/badge/firmware-0.1%20dev-orange)](https://github.com/proxynet2017/OmniBox/releases/tag/firmware-v0.1-dev)
+[![KiCad](https://img.shields.io/badge/KiCad-10-blue)](hardware/omnibox-v1/)
+[![License](https://img.shields.io/badge/license-non--commercial-red)](LICENSE.md)
 
-| Item | Version | Status |
+</div>
+
+## What It Is
+
+OmniBox is a public hardware and firmware project for building a capable vehicle
+interface around documented, inspectable design files. The V1 board is intended
+to be more than a simple USB-to-CAN adapter: it combines isolated USB, protected
+vehicle power, multi-channel CAN/CAN-FD, K-line, J1850/SWCAN hardware stages,
+programmable FEPS generation, measurement feedback and an OBD routing matrix.
+
+The hardware is designed to support ECU communication and reprogramming
+workflows both through OBD and on the bench. That includes the physical-layer
+building blocks normally needed for flashing-oriented work: controlled vehicle
+side power, routable diagnostic lines, FEPS generation, CAN/CAN-FD, K-line and
+feedback measurements. Firmware support is still in early development, so this
+should be read as a hardware capability and project direction, not a claim that
+all reprogramming workflows are already validated.
+
+## Why It Exists
+
+Most low-cost diagnostic interfaces are closed, narrow or difficult to inspect.
+OmniBox takes the opposite approach:
+
+| Goal | What V1 Provides |
+|---|---|
+| Inspectable hardware | KiCad schematic, PCB, footprints, BOM and production files |
+| Real ECU work | OBD and bench-oriented routing, FEPS and multiple bus interfaces |
+| Electrical resilience | Isolation, TVS protection, protected power input and automotive parts |
+| Firmware headroom | STM32H723 Cortex-M7 with native FDCAN and enough RAM for queues/traces |
+| Community development | Public J2534/ELM327 firmware base and host-side test tools |
+| Reproducibility | Gerbers, drill files, enclosure files and release assets |
+
+## Current Releases
+
+| Package | Version | Link |
 |---|---:|---|
-| Board | 1.0 beta | Public V1 hardware release |
-| Firmware | 0.1 dev | Early J2534 + ELM327 development firmware |
-| Host tools | 0.1 dev | J2534 DLL, virtual device and test tools |
+| Hardware manufacturing package | 1.0 beta | [hardware-v1.0-beta](https://github.com/proxynet2017/OmniBox/releases/tag/hardware-v1.0-beta) |
+| Firmware source and binaries | 0.1 dev | [firmware-v0.1-dev](https://github.com/proxynet2017/OmniBox/releases/tag/firmware-v0.1-dev) |
 
-Current releases:
+Firmware release assets include `.elf`, `.bin`, `.hex`, `.map` and source
+archive files.
 
-- Hardware package: <https://github.com/proxynet2017/OmniBox/releases/tag/hardware-v1.0-beta>
-- Firmware package: <https://github.com/proxynet2017/OmniBox/releases/tag/firmware-v0.1-dev>
+## Hardware Highlights
 
-## What Is Included
-
-The repository contains the public OmniBox V1 package:
-
-- complete KiCad 10 project for the board;
-- schematic, PCB layout, local symbols and local footprints;
-- consolidated BOM;
-- regenerated Gerbers, drill files and manufacturing archive;
-- schematic PDF;
-- sheet-metal enclosure files and auxiliary 3D-printable parts;
-- bare-metal STM32H723 firmware source;
-- public USB identity framework with empty experimental slots;
-- J2534 transport/core work in progress;
-- ELM327-compatible CDC serial work in progress;
-- host-side J2534 DLL sources, virtual device and test tools.
-
-Only the public J2534 and ELM327-oriented firmware is included. The
-multi-identity architecture remains present, but the public release ships only
-empty experimental identity slots.
-
-## Hardware Overview
-
-| Area | V1 capability |
+| Area | OmniBox V1 |
 |---|---|
 | Host connection | Isolated USB Full-Speed with WinUSB and CDC interfaces |
-| Main controller | STM32H723ZGTx Cortex-M7 |
-| CAN / CAN-FD | Five routable CAN channels |
-| CAN transceivers | NXP TJA1463 automotive CAN SIC transceivers |
-| External CAN-FD controllers | Microchip MCP2518FD over SPI |
-| K-line | Three ST L9637D ISO 9141-2 / ISO 14230 transceiver channels |
-| SWCAN / J1850 | Dedicated hardware stages for Single-Wire CAN, VPW and PWM work |
-| FEPS | Programmable voltage generation with current and voltage feedback |
-| Routing | Relay and analog-switch matrix for adapting interfaces to OBD pins |
-| Isolation | Isolated power and digital barrier between host and vehicle domains |
-| Protection | Vehicle input protection, TVS clamps, ESD protection and supervised power |
-| Enclosure | Sheet-metal enclosure plus generated STEP/STL files |
+| MCU | STM32H723ZGTx Cortex-M7 |
+| CAN / CAN-FD | Five routable CAN-capable channels |
+| CAN physical layer | NXP TJA1463 automotive CAN SIC transceivers |
+| External CAN-FD | Microchip MCP2518FD controllers over SPI |
+| K-line | Three ST L9637D ISO 9141-2 / ISO 14230 channels |
+| SWCAN / J1850 | Dedicated Single-Wire CAN, VPW and PWM hardware stages |
+| FEPS | Programmable boost stage with DAC control and ADC/current feedback |
+| Routing | Relay and protected analog-switch matrix for OBD/J1962 pins |
+| Protection | SM8S24A TVS, ESD/TVS protection, filtering and protected power input |
+| Isolation | Isolated power, isolated I2C and digital isolators |
+| Mechanical | Sheet-metal enclosure plus STEP/STL printable/mechanical files |
 
-## Design Goals
+## Reprogramming-Oriented Design
 
-OmniBox V1 was designed around a few practical engineering goals:
+OmniBox V1 was designed with ECU flashing and calibration workflows in mind,
+including both in-vehicle OBD work and bench harness work.
 
-- keep the board inspectable and modifiable in KiCad;
-- use documented components from known manufacturers;
-- separate the PC side from the vehicle side with galvanic isolation;
-- support more than the common two-pin CAN use case;
-- expose enough routing flexibility for real diagnostic and bench scenarios;
-- leave firmware headroom for timing-sensitive protocol work;
-- provide manufacturing files that can be reviewed and ordered without hidden
-  private assets;
-- make the public project useful even before the full firmware feature set is
-  complete.
+Hardware features relevant to that goal:
 
-## Main Hardware Choices
+- routable CAN/CAN-FD channels for modern ECU and gateway communication;
+- multiple K-line channels for older ISO 9141-2 / ISO 14230 ECUs;
+- J1850/SWCAN hardware stages for less common physical layers;
+- programmable FEPS generation rather than a blind fixed rail;
+- voltage and current feedback around the FEPS stage;
+- controlled routing to OBD/J1962 pins;
+- galvanic isolation between PC and vehicle domains;
+- protected vehicle-side supply input and transient handling;
+- enough MCU performance for transport queues, timing and future flashing logic.
 
-### STM32H723ZGTx MCU
+The public firmware currently focuses on the J2534 and ELM327 base. The board is
+intended to grow into a reliable open non-commercial flashing-capable platform,
+but protocol coverage and validation still need contributors and hardware
+testing.
 
-The board uses an STM32H723ZGTx Cortex-M7 microcontroller to leave substantial
-headroom for USB transport, protocol scheduling, buffering, timestamping and
-future firmware work.
+## Main Component Choices
 
-The STM32H7 family is a good fit for this project because it provides:
+### STM32H723ZGTx
 
-- high single-core performance for real-time protocol handling;
-- native FDCAN peripherals;
-- enough RAM for queues, traces and transport buffers;
-- USB device capability;
-- mature GCC/CMake support;
-- a large ecosystem of public documentation and examples.
+The STM32H723 gives the project room to grow. Its Cortex-M7 core, native FDCAN
+peripherals, USB device support and memory headroom make it suitable for timing
+sensitive transport work, buffering, trace collection and future protocol logic.
 
-The firmware is bare-metal C using CMSIS, STM32H7 HAL and TinyUSB. This keeps the
-runtime understandable and avoids hiding protocol behavior behind a large RTOS
-or opaque vendor framework.
+The firmware is bare-metal C using CMSIS, STM32H7 HAL and TinyUSB. This keeps
+the stack understandable and avoids hiding protocol behavior behind a large
+opaque framework.
 
-### CAN and CAN-FD
+### NXP TJA1463 and Microchip MCP2518FD
 
-OmniBox V1 exposes five CAN-capable channels. The design combines the STM32H7
-native FDCAN peripherals with external Microchip MCP2518FD controllers where
-additional channels are needed.
+The board combines native STM32 FDCAN peripherals with external MCP2518FD
+controllers to reach five CAN-capable channels. TJA1463 automotive CAN SIC
+transceivers provide a modern physical layer suitable for CAN-FD experiments and
+cleaner signaling margins than older generic CAN transceivers.
 
-The board uses NXP TJA1463 automotive CAN SIC transceivers. The choice favors a
-modern automotive CAN physical layer, CAN-FD capability and better signal
-integrity margins than older generic transceiver choices.
+### ST L9637D K-line
 
-This gives the hardware enough flexibility for:
+Three L9637D channels are included so K-line support is not treated as a single
+legacy pin. This matters for bench ECUs and vehicles where routing assumptions
+are not always simple.
 
-- standard OBD CAN use;
-- multi-bus ECUs and gateways;
-- bench harnesses with more than one CAN network;
-- CAN-FD experiments;
-- future J2534 channel work.
+### FEPS Stage
 
-### K-line
+The FEPS stage uses an LT8362 boost controller with MCP4922 DAC control, INA240
+current measurement and MCP3426 ADC feedback. The point is controllability:
+firmware can supervise and sequence a programming voltage instead of blindly
+switching a fixed output.
 
-Three ST L9637D transceiver channels are included for ISO 9141-2 and ISO 14230
-style K-line work. Keeping multiple hardware K-line channels avoids treating
-K-line as an afterthought and gives the routing matrix useful options for ECUs
-and vehicles that do not follow the simplest pinout assumptions.
+### Isolation and Protection
 
-### SWCAN and J1850
+The host side and vehicle side are separated with isolated digital channels,
+isolated I2C and isolated power. Vehicle power is handled through a protected
+input stage, high-energy TVS protection and an LM61460-Q1 regulator.
 
-The V1 board includes dedicated hardware stages for Single-Wire CAN and J1850
-VPW/PWM work. These parts of the design are important because many interfaces
-focus only on CAN and leave older or less common physical layers unsupported.
-
-Firmware support for these areas is still work in progress. The hardware exists
-so contributors can validate, measure and implement protocol support without
-needing a new board revision first.
-
-### FEPS Generation and Measurement
-
-OmniBox includes a programmable FEPS supply stage built around an LT8362 boost
-controller, MCP4922 DAC control, INA240 current measurement and MCP3426 ADC
-feedback.
-
-The intent is not simply to switch a fixed voltage. The board is designed to
-generate and supervise a controlled programming voltage, with feedback available
-to firmware. That makes it more suitable for controlled experiments and safer
-firmware development than a blind always-on rail.
-
-### Isolation Barrier
-
-The host and vehicle domains are separated. The design uses isolated digital
-channels, isolated I2C and an isolated power stage built around parts such as
-TI ISO774x digital isolators, ISO1640 isolated I2C and an SN6505B transformer
-driver.
-
-This isolation strategy is a deliberate board-level choice. It reduces the risk
-of ground loops and helps protect the PC side when working with noisy vehicle
-or bench environments. It also makes the schematic easier to reason about:
-host-side logic and vehicle-side physical layers are clearly separated.
-
-### Power Input and Protection
-
-Vehicle power is noisy and unforgiving. OmniBox V1 includes a protected input
-stage, a definitive SM8S24A TVS orientation on the local-finish manufacturing
-package, filtering and a TI LM61460-Q1 buck regulator.
-
-The use of an automotive-grade regulator and high-energy TVS protection is a
-pragmatic choice: the board is expected to be connected to real harnesses,
-bench supplies and vehicle-like conditions where transients, reverse events and
-operator mistakes must be considered during design review.
+That architecture is deliberate. It reduces PC-side exposure during bench work,
+makes ground domains easier to reason about and gives reviewers clear protection
+blocks to inspect.
 
 ### Routing Matrix
 
-The routing matrix is one of the most important parts of the board. It combines
-relays and protected analog switches, including ADG5412F devices, to route
-physical interfaces to OBD/J1962 pins.
+The routing matrix uses relays and protected ADG5412F analog switches to map
+interfaces to OBD/J1962 pins. This makes the board useful for more than one
+fixed pinout and reduces external wiring changes during protocol development.
 
-The goal is to support more diagnostic topologies without rewiring the bench
-every time:
-
-- route CAN channels to different OBD pins;
-- expose K-line options;
-- switch FEPS where supported by the design;
-- handle less common pin assignments;
-- keep firmware in control of safe idle states.
-
-### Mechanical Design
-
-The recommended enclosure is the sheet-metal design under
-`hardware/omnibox-v1/enclosure/sheetmetal/`.
-
-Generated STEP/STL files are included so the mechanical design can be reviewed,
-quoted or adapted without running private scripts. Auxiliary printable parts are
-available under `hardware/omnibox-v1/enclosure/print3d/`.
-
-## Firmware Status
+## Public Firmware
 
 Firmware version `0.1 dev` is an early public development release.
 
-Implemented or present:
+Present today:
 
-- TinyUSB-based USB device stack;
+- TinyUSB device stack;
 - WinUSB vendor bulk transport for J2534-oriented communication;
 - CDC serial interface for ELM327-style commands;
 - public USB mode switching command;
-- multi-identity infrastructure with empty public slots;
+- multi-identity framework with empty public experimental slots;
 - board driver structure for CAN/CAN-FD, K-line, J1850/SWCAN, FEPS and routing;
-- host-side tests and a virtual device for transport validation.
+- host-side tests and virtual device tooling.
 
-Still to test, complete or improve:
+Still in progress:
 
-- complete J2534 API behavior across all supported protocols;
-- robust timing, filtering and queue behavior under load;
-- ISO-TP edge cases and long-transfer validation;
-- K-line initialization and timing validation on real ECUs;
+- complete J2534 behavior and edge cases;
+- protocol timing under real load;
+- ISO-TP long transfers;
+- K-line initialization and timing validation;
 - SWCAN and J1850 firmware support;
 - FEPS sequencing and safety interlocks;
-- more ELM327 command compatibility;
-- Windows installer/driver packaging;
-- real-vehicle and bench ECU test matrix.
+- more ELM327 compatibility;
+- Windows packaging and broader host validation;
+- real ECU bench and OBD test matrix.
 
-## Building the Firmware
+## Build Firmware
 
 Prerequisites:
 
 - `arm-none-eabi-gcc`;
 - CMake;
 - Ninja;
-- Git access for the pinned dependencies.
-
-Build:
+- Git access for pinned dependencies.
 
 ```bash
 cmake -S firmware -B firmware/build -G Ninja \
@@ -243,74 +192,64 @@ Expected outputs:
 - `firmware/build/firmware.hex`
 - `firmware/build/firmware.map`
 
-The first configure downloads pinned versions of CMSIS, STM32H7 HAL and TinyUSB
-through CMake FetchContent.
+## Manufacturing Files
 
-## Manufacturing
-
-Main hardware files:
-
-- `hardware/omnibox-v1/omnibox-v1.kicad_pro`
-- `hardware/omnibox-v1/omnibox-v1.kicad_sch`
-- `hardware/omnibox-v1/omnibox-v1.kicad_pcb`
-- `hardware/omnibox-v1/production/bom-consolide.csv`
-- `hardware/omnibox-v1/production/j2534-schematics.pdf`
-- `hardware/omnibox-v1/production/local-finish/gerber/`
-- `hardware/omnibox-v1/production/local-finish/j2534-gerbers-jlcpcb.zip`
-- `hardware/omnibox-v1/enclosure/`
+| File | Purpose |
+|---|---|
+| `hardware/omnibox-v1/omnibox-v1.kicad_pro` | KiCad project |
+| `hardware/omnibox-v1/omnibox-v1.kicad_sch` | Main schematic |
+| `hardware/omnibox-v1/omnibox-v1.kicad_pcb` | PCB layout |
+| `hardware/omnibox-v1/production/bom-consolide.csv` | Consolidated BOM |
+| `hardware/omnibox-v1/production/j2534-schematics.pdf` | Schematic PDF |
+| `hardware/omnibox-v1/production/local-finish/j2534-gerbers-jlcpcb.zip` | Gerber archive |
+| `hardware/omnibox-v1/enclosure/` | Sheet-metal and printable enclosure files |
 
 The local-finish Gerber package was regenerated with KiCad 10.0.4 from the
-corrected PCB. The `D_PWR1` footprint uses the definitive `SM8S24A` orientation.
+corrected PCB. `D_PWR1` uses the definitive `SM8S24A` orientation.
 
-Before ordering boards:
-
-- review the schematic and PCB in KiCad;
-- verify the BOM against current distributor availability;
-- verify component orientation with the assembler;
-- review DRC warnings and vendor manufacturing rules;
-- check stack-up, drill files, solder mask and paste layers;
-- validate enclosure dimensions against your connectors and assembly process.
+Before ordering boards, review the schematic, PCB, BOM, component orientation,
+DRC warnings, stack-up, solder mask, paste layers and enclosure fit with your
+manufacturer or assembler.
 
 ## Repository Layout
 
 ```text
-hardware/omnibox-v1/    Board 1.0 beta KiCad sources, production files and enclosure
-firmware/               Firmware 0.1 dev for STM32H723
+hardware/omnibox-v1/    KiCad board, production files and enclosure
+firmware/               STM32H723 firmware
 host/                   J2534 DLL, virtual device and PC-side tools
-docs/                   Additional public notes
-LICENSE.md              Public non-commercial license and commercial license notice
+docs/                   Images and public documentation
+LICENSE.md              Public non-commercial license and commercial notice
 SUPPORT.md              Donations, sponsoring and contribution information
 FORUM_POST.md           Forum presentation draft
 ```
 
-## Contributing
+## Looking For Contributors
 
-Useful contribution areas:
+Useful help areas:
 
-- schematic and PCB review;
+- board review and DRC/manufacturing feedback;
 - automotive protection and isolation review;
-- BOM validation and second-source suggestions;
-- enclosure and mechanical improvements;
-- firmware drivers for the existing hardware blocks;
-- J2534 behavior, tests and host compatibility;
-- ELM327 command compatibility;
-- protocol timing validation on bench ECUs;
-- documentation, diagrams and setup notes.
+- BOM validation and alternate parts;
+- J2534 implementation and tests;
+- ELM327 compatibility;
+- K-line, J1850, SWCAN and FEPS firmware work;
+- ECU bench validation;
+- Windows host tooling and packaging;
+- enclosure/mechanical improvements;
+- documentation and test procedures.
 
-The project especially benefits from contributors who can test on real hardware,
-review automotive analog design, improve Windows host integration or help turn
-the existing hardware blocks into reliable firmware features.
+If you can test on real ECUs, review automotive analog hardware or help turn the
+existing hardware blocks into reliable firmware features, your contribution is
+especially valuable.
 
 ## License
 
-OmniBox uses a dual-license model.
+OmniBox is public for non-commercial use only.
 
-The public repository is available for non-commercial use only. Commercial use,
-commercial manufacturing, paid services, commercial integration and resale
-require prior written permission from the maintainer.
-
-See `LICENSE.md` for the full terms. See `SUPPORT.md` for donation, sponsoring
-and commercial licensing information.
+Commercial use, commercial manufacturing, resale, paid services, commercial
+integration and commercial distribution require prior written permission from the
+maintainer. See [LICENSE.md](LICENSE.md) for the full terms and [SUPPORT.md](SUPPORT.md)
+for donation, sponsoring and commercial licensing information.
 
 ## Safety Notice
 
