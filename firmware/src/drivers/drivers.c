@@ -429,7 +429,7 @@ void can_init(void)
   HAL_NVIC_SetPriority(FDCAN2_IT0_IRQn, 5, 0); HAL_NVIC_EnableIRQ(FDCAN2_IT0_IRQn);
   HAL_NVIC_SetPriority(FDCAN3_IT0_IRQn, 5, 0); HAL_NVIC_EnableIRQ(FDCAN3_IT0_IRQn);
   
-  for (uint8_t m = 0; m < 3u; m++) mcp_init(m, 500000u);
+  for (uint8_t m = 0; m < 3u; m++) mcp_init(m, 500000u, 500000u);
 }
 
 void can_service(void) { }
@@ -437,7 +437,7 @@ void can_service(void) { }
 int can_open(uint8_t ch, uint32_t nominal_baud, uint32_t data_baud, uint32_t flags)
 {
   (void)data_baud; (void)flags;    
-  if (ch > CAN_CH3) return mcp_init((uint8_t)(ch - CAN_CH4_MCP1), nominal_baud); 
+  if (ch > CAN_CH3) return mcp_init((uint8_t)(ch - CAN_CH4_MCP1), nominal_baud, data_baud);
   HAL_FDCAN_Stop(&s_fdcan[ch]);
   return fdcan_setup(ch, nominal_baud);
 }
@@ -451,8 +451,7 @@ int can_close(uint8_t ch)
 int can_tx(uint8_t ch, uint32_t id, const uint8_t *data, uint8_t len, uint32_t flags)
 {
   if (ch > CAN_CH3)          
-    return mcp_tx((uint8_t)(ch - CAN_CH4_MCP1), id, data, (len > 8) ? 8 : len,
-           (flags & J2534_CAN_29BIT_ID) ? 1u : 0u);
+    return mcp_tx((uint8_t)(ch - CAN_CH4_MCP1), id, data, len, flags);
   if (len > CAN_FRAME_DATA_MAX) len = CAN_FRAME_DATA_MAX;
   uint8_t txdata[CAN_FRAME_DATA_MAX];
   uint8_t payload_len = len;
@@ -491,15 +490,19 @@ int can_tx(uint8_t ch, uint32_t id, const uint8_t *data, uint8_t len, uint32_t f
 }
 
 
-int can_read(uint8_t ch, uint32_t *id, uint8_t *data, uint8_t *len, uint8_t *ext)
+int can_read(uint8_t ch, uint32_t *id, uint8_t *data, uint8_t *len, uint32_t *flags)
 {
-  if (ch > CAN_CH3)          
-    return mcp_read((uint8_t)(ch - CAN_CH4_MCP1), id, data, len, ext);
+  if (ch > CAN_CH3)
+    return mcp_read((uint8_t)(ch - CAN_CH4_MCP1), id, data, len, flags);
   if (s_can_rx_tail[ch] == s_can_rx_head[ch]) return 0;
   const volatile can_frame_t *fr = &s_can_rx[ch][s_can_rx_tail[ch]];
   if (id) *id = fr->id;
   if (len) *len = fr->len;
-  if (ext) *ext = fr->ext;
+  if (flags) {
+    *flags = fr->ext ? J2534_CAN_29BIT_ID : 0u;
+    if (fr->fd) *flags |= OMNI_CAN_FD_FRAME;
+    if (fr->brs) *flags |= OMNI_CAN_BRS;
+  }
   if (data) for (uint8_t i = 0; i < fr->len; i++) data[i] = fr->data[i];
   s_can_rx_tail[ch] = (uint16_t)((s_can_rx_tail[ch] + 1) % CAN_RX_DEPTH);
   return 1;

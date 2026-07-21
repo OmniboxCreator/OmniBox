@@ -231,12 +231,12 @@ int can_tx(uint8_t ch, uint32_t id, const uint8_t *data, uint8_t len, uint32_t f
 {
   (void)ch; (void)flags; ecu_on_frame(id, data, len); return 0;
 }
-int can_read(uint8_t ch, uint32_t *id, uint8_t *data, uint8_t *len, uint8_t *ext)
+int can_read(uint8_t ch, uint32_t *id, uint8_t *data, uint8_t *len, uint32_t *flags)
 {
   (void)ch;
   if (ecu_qt == ecu_qh) return 0;
   busframe_t *f = &ecu_q[ecu_qt];
-  *id = f->id; *len = f->len; *ext = (f->id > 0x7FFu) ? 1u : 0u;  
+  *id = f->id; *len = f->len; *flags = (f->id > 0x7FFu) ? J2534_CAN_29BIT_ID : 0u;
   for (uint8_t i = 0; i < f->len; i++) data[i] = f->data[i];
   ecu_qt = (ecu_qt + 1) % 256;
   return 1;

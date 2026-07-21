@@ -668,8 +668,8 @@ static void push_isotp_msg(const j2534_channel_t *c, uint32_t ch_id, isotp_link_
 
 static void j2534_drain_can(uint32_t ch_id, j2534_channel_t *c)
 {
-	  uint32_t id; uint8_t data[64], len, ext;
-  while (can_read(c->can_phys, &id, data, &len, &ext)) {
+  uint32_t id, flags; uint8_t data[64], len;
+  while (can_read(c->can_phys, &id, data, &len, &flags)) {
     trace_can_frame(TRACE_BUS_RX, c->can_phys, id, data, len);
     if (is_iso15765(c->protocol_id)) {
       int fi = j2534_find_flow_by_rx(c->filters, J2534_MAX_FILTERS, id);
@@ -688,7 +688,7 @@ static void j2534_drain_can(uint32_t ch_id, j2534_channel_t *c)
 	    if (!j2534_filters_accept_msg(c->filters, J2534_MAX_FILTERS, id, data, len)) continue;
     j2534_msg_t m; memset(&m, 0, sizeof(m));
     m.protocol_id = c->protocol_id;
-    if (ext) m.rx_status |= J2534_CAN_29BIT_ID;
+    m.rx_status |= flags & (J2534_CAN_29BIT_ID | OMNI_CAN_FD_FRAME | OMNI_CAN_BRS);
     m.data[0] = (uint8_t)(id >> 24); m.data[1] = (uint8_t)(id >> 16);
     m.data[2] = (uint8_t)(id >> 8); m.data[3] = (uint8_t)id;
     for (uint8_t i = 0; i < len; i++) m.data[4 + i] = data[i];

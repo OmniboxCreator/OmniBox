@@ -1,7 +1,9 @@
 
 #include "stm32h7xx_hal.h"
+#include <string.h>
 #include "mcp2518fd.h"
 #include "../board/board.h"
+#include "../j2534/j2534_defs.h"
 
 
 volatile uint32_t g_mcp_osc_dbg[3] = { 0, 0, 0 };
@@ -32,7 +34,17 @@ volatile uint32_t g_mcp_osc_dbg[3] = { 0, 0, 0 };
 #define CON_ISOCRCEN  (1u << 5)
 #define CON_REQOP_POS 24u
 #define CON_OPMOD_POS 21u
-#define REQOP_CLASSIC 6u      
+#define REQOP_NORMAL_FD 0u
+#define REQOP_CLASSIC 6u
+#define TXOBJ_IDE  (1u << 4)
+#define TXOBJ_RTR  (1u << 5)
+#define TXOBJ_BRS  (1u << 6)
+#define TXOBJ_FDF  (1u << 7)
+#define FIFO_PLSIZE_64 (7u << 29)
+#define FIFO_FSIZE(n)  (((uint32_t)((n) - 1u) & 0x1Fu) << 24)
+#define TXQ_TXPRI(n)  (((uint32_t)(n) & 0x1Fu) << 16)
+#define TXQ_OBJECT_BYTES 72u
+#define RX_OBJECT_BYTES 72u
 #define FIFO_UINC   (1u << 8)
 #define FIFO_TXREQ   (1u << 9)
 #define FIFOSTA_NOTEMPTY (1u << 0)  
@@ -43,6 +55,9 @@ static const mcp_cs_t MCP_CS[3] = {
   { GPIOC, GPIO_PIN_5 },  
   { GPIOB, GPIO_PIN_1 },  
 };
+
+static uint8_t s_mcp_fd_enabled[3];
+static uint32_t s_mcp_data_baud[3];
 
 static inline void cs_lo(uint8_t i) { HAL_GPIO_WritePin(MCP_CS[i].port, MCP_CS[i].pin, GPIO_PIN_RESET); }
 static inline void cs_hi(uint8_t i) { HAL_GPIO_WritePin(MCP_CS[i].port, MCP_CS[i].pin, GPIO_PIN_SET); }
@@ -72,8 +87,8 @@ static uint32_t mcp_read32(uint8_t i, uint16_t addr)
 
 static void mcp_write_ram(uint8_t i, uint16_t addr, const uint8_t *d, uint8_t n)
 {
-  uint8_t tx[2 + 16];
-  if (n > 16) n = 16;
+  uint8_t tx[2 + TXQ_OBJECT_BYTES];
+  if (n > TXQ_OBJECT_BYTES) n = TXQ_OBJECT_BYTES;
   uint16_t cmd = (uint16_t)((MCP_INSTR_WRITE << 12) | (addr & 0x0FFFu));
   tx[0] = (uint8_t)(cmd >> 8); tx[1] = (uint8_t)cmd;
   for (uint8_t k = 0; k < n; k++) tx[2 + k] = d[k];
@@ -82,8 +97,8 @@ static void mcp_write_ram(uint8_t i, uint16_t addr, const uint8_t *d, uint8_t n)
 
 static void mcp_read_ram(uint8_t i, uint16_t addr, uint8_t *d, uint8_t n)
 {
-  uint8_t tx[2 + 16], rx[2 + 16];
-  if (n > 16) n = 16;
+  uint8_t tx[2 + RX_OBJECT_BYTES], rx[2 + RX_OBJECT_BYTES];
+  if (n > RX_OBJECT_BYTES) n = RX_OBJECT_BYTES;
   uint16_t cmd = (uint16_t)((MCP_INSTR_READ << 12) | (addr & 0x0FFFu));
   tx[0] = (uint8_t)(cmd >> 8); tx[1] = (uint8_t)cmd;
   for (uint8_t k = 0; k < n; k++) tx[2 + k] = 0;
@@ -91,10 +106,33 @@ static void mcp_read_ram(uint8_t i, uint16_t addr, uint8_t *d, uint8_t n)
   for (uint8_t k = 0; k < n; k++) d[k] = rx[2 + k];
 }
 
-int mcp_init(uint8_t i, uint32_t nominal_baud)
+static uint8_t dlc_from_len(uint8_t len)
+{
+  if (len <= 8u) return len;
+  if (len <= 12u) return 9u;
+  if (len <= 16u) return 10u;
+  if (len <= 20u) return 11u;
+  if (len <= 24u) return 12u;
+  if (len <= 32u) return 13u;
+  if (len <= 48u) return 14u;
+  return 15u;
+}
+
+static uint8_t len_from_dlc(uint8_t dlc)
+{
+  static const uint8_t lens[16] = {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64
+  };
+  return lens[dlc & 0x0Fu];
+}
+
+int mcp_init(uint8_t i, uint32_t nominal_baud, uint32_t data_baud)
 {
   if (i > 2) return -1;
   if (!nominal_baud) nominal_baud = 500000u;
+  if (!data_baud) data_baud = nominal_baud;
+  s_mcp_data_baud[i] = data_baud;
+  s_mcp_fd_enabled[i] = (data_baud != nominal_baud) ? 1u : 0u;
   cs_hi(i);
   mcp_reset(i);
   for (volatile uint32_t d = 0; d < 200000u; d++) { }    
@@ -109,52 +147,63 @@ int mcp_init(uint8_t i, uint32_t nominal_baud)
   
   uint32_t div = 40000000u / (80u * nominal_baud);
   uint32_t brp = (div > 0u) ? (div - 1u) : 0u;
+  uint32_t ddiv = 40000000u / (20u * data_baud);
+  uint32_t dbrp = (ddiv > 0u) ? (ddiv - 1u) : 0u;
   mcp_write32(i, MCP_C1NBTCFG, (brp << 24) | (62u << 16) | (15u << 8) | 15u);
-  mcp_write32(i, MCP_C1DBTCFG, (brp << 24) | (14u << 16) | (3u << 8) | 3u);  
+  mcp_write32(i, MCP_C1DBTCFG, (dbrp << 24) | (14u << 16) | (3u << 8) | 3u);
 
-  mcp_write32(i, MCP_C1TXQCON,  (1u << 7) | (7u << 19));  
-  mcp_write32(i, MCP_C1FIFOCON1, (15u << 19));       
+  mcp_write32(i, MCP_C1TXQCON, FIFO_PLSIZE_64 | FIFO_FSIZE(8u) | TXQ_TXPRI(7u));
+  mcp_write32(i, MCP_C1FIFOCON1, FIFO_PLSIZE_64 | FIFO_FSIZE(16u) | 1u);
   mcp_write32(i, MCP_C1FLTOBJ0, 0u);
   mcp_write32(i, MCP_C1MASK0,  0u);            
   mcp_write32(i, MCP_C1FLTCON0, 0x00000081u);       
 
-  mcp_write32(i, MCP_C1CON, CON_TXQEN | CON_ISOCRCEN | (REQOP_CLASSIC << CON_REQOP_POS));
+  mcp_write32(i, MCP_C1CON, CON_TXQEN | CON_ISOCRCEN | (REQOP_NORMAL_FD << CON_REQOP_POS));
   t0 = board_micros();
-  while ((((mcp_read32(i, MCP_C1CON) >> CON_OPMOD_POS) & 0x7u) != REQOP_CLASSIC)
+  while ((((mcp_read32(i, MCP_C1CON) >> CON_OPMOD_POS) & 0x7u) != REQOP_NORMAL_FD)
       && (board_micros() - t0) < 5000u) { }
   return 0;
 }
 
-int mcp_tx(uint8_t i, uint32_t id, const uint8_t *data, uint8_t len, uint8_t ext)
+int mcp_tx(uint8_t i, uint32_t id, const uint8_t *data, uint8_t len, uint32_t flags)
 {
   if (i > 2) return -1;
-  if (len > 8) len = 8;
+  if (len > 64u) len = 64u;
   uint32_t ua = mcp_read32(i, MCP_C1TXQUA);
-  uint8_t obj[8 + 8] = {0};
+  uint8_t obj[TXQ_OBJECT_BYTES] = {0};
+  uint8_t dlc = dlc_from_len(len);
+  uint8_t wire_len = len_from_dlc(dlc);
+  uint8_t ext = (flags & J2534_CAN_29BIT_ID) ? 1u : 0u;
   uint32_t t0 = ext ? (id & 0x1FFFFFFFu) : (id & 0x7FFu);
-  uint32_t t1 = (uint32_t)len | (ext ? (1u << 4) : 0u);  
+  uint32_t t1 = dlc | (ext ? TXOBJ_IDE : 0u);
+  if (flags & OMNI_CAN_FD_FRAME) t1 |= TXOBJ_FDF;
+  if (flags & OMNI_CAN_BRS) t1 |= TXOBJ_BRS;
   obj[0] = (uint8_t)t0; obj[1] = (uint8_t)(t0 >> 8); obj[2] = (uint8_t)(t0 >> 16); obj[3] = (uint8_t)(t0 >> 24);
   obj[4] = (uint8_t)t1; obj[5] = (uint8_t)(t1 >> 8); obj[6] = (uint8_t)(t1 >> 16); obj[7] = (uint8_t)(t1 >> 24);
-  for (uint8_t k = 0; k < len; k++) obj[8 + k] = data[k];
-  uint8_t total = (uint8_t)(8u + ((len + 3u) & ~3u));   
+  if (data && len) memcpy(obj + 8, data, len);
+  uint8_t total = (uint8_t)(8u + ((wire_len + 3u) & ~3u));
   mcp_write_ram(i, (uint16_t)(MCP_RAM_START + ua), obj, total);
   mcp_write32(i, MCP_C1TXQCON, mcp_read32(i, MCP_C1TXQCON) | FIFO_UINC | FIFO_TXREQ);
   return 0;
 }
 
-int mcp_read(uint8_t i, uint32_t *id, uint8_t *data, uint8_t *len, uint8_t *ext)
+int mcp_read(uint8_t i, uint32_t *id, uint8_t *data, uint8_t *len, uint32_t *flags)
 {
   if (i > 2) return 0;
   if (!(mcp_read32(i, MCP_C1FIFOSTA1) & FIFOSTA_NOTEMPTY)) return 0;
   uint32_t ua = mcp_read32(i, MCP_C1FIFOUA1);
-  uint8_t obj[8 + 8];
+  uint8_t obj[RX_OBJECT_BYTES];
   mcp_read_ram(i, (uint16_t)(MCP_RAM_START + ua), obj, sizeof obj);
   uint32_t r0 = (uint32_t)obj[0] | ((uint32_t)obj[1] << 8) | ((uint32_t)obj[2] << 16) | ((uint32_t)obj[3] << 24);
   uint32_t r1 = (uint32_t)obj[4] | ((uint32_t)obj[5] << 8) | ((uint32_t)obj[6] << 16) | ((uint32_t)obj[7] << 24);
   uint8_t e = (r1 & (1u << 4)) ? 1u : 0u;
-  if (ext) *ext = e;
+  if (flags) {
+    *flags = e ? J2534_CAN_29BIT_ID : 0u;
+    if (r1 & TXOBJ_FDF) *flags |= OMNI_CAN_FD_FRAME;
+    if (r1 & TXOBJ_BRS) *flags |= OMNI_CAN_BRS;
+  }
   if (id) *id = e ? (r0 & 0x1FFFFFFFu) : (r0 & 0x7FFu);
-  uint8_t l = (uint8_t)(r1 & 0x0Fu); if (l > 8u) l = 8u;
+  uint8_t l = len_from_dlc((uint8_t)(r1 & 0x0Fu));
   if (len) *len = l;
   if (data) for (uint8_t k = 0; k < l; k++) data[k] = obj[8 + k];
   mcp_write32(i, MCP_C1FIFOCON1, mcp_read32(i, MCP_C1FIFOCON1) | FIFO_UINC);  

@@ -13,7 +13,7 @@ int can_open(uint8_t ch, uint32_t nominal_baud, uint32_t data_baud, uint32_t fla
 int can_close(uint8_t ch);
 int can_tx(uint8_t ch, uint32_t id, const uint8_t *data, uint8_t len, uint32_t flags);
 
-int can_read(uint8_t ch, uint32_t *id, uint8_t *data, uint8_t *len, uint8_t *ext);
+int can_read(uint8_t ch, uint32_t *id, uint8_t *data, uint8_t *len, uint32_t *flags);
 void can_irq(uint8_t ch);  
 
 

@@ -17,6 +17,8 @@ Current development status:
 - Implemented host/firmware capability negotiation for OmniBox protocol v2.
 - Implemented OmniBox channel configuration hooks for physical bus selection,
   OBD routing, CAN termination, CAN polarity swap, SWCAN mode and CAN-FD flags.
+- Implemented STM32 FDCAN and MCP2518FD CAN-FD framing paths with 64-byte DLC
+  mapping and BRS/FDF flag propagation.
 - Implemented ELM327 CAN single-frame transmit and multi-frame ISO-TP response
   reassembly.
 - K-line init IOCTLs are wired through the host/firmware protocol; physical

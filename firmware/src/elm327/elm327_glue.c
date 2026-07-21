@@ -34,9 +34,9 @@ static int ops_can_tx(void *u, uint32_t id, int ext, const uint8_t *d, uint8_t n
 static int ops_can_rx(void *u, uint32_t *id, int *ext, uint8_t *d, uint8_t *n)
 {
   (void)u;
-  uint8_t e8 = 0;
-  if (!can_read(CAN_CH1, id, d, n, &e8)) return 0;
-  *ext = e8;
+  uint32_t flags = 0;
+  if (!can_read(CAN_CH1, id, d, n, &flags)) return 0;
+  *ext = (flags & J2534_CAN_29BIT_ID) ? 1 : 0;
   return 1;
 }
 
