@@ -6,6 +6,13 @@
 #include "../shared/pt_transport.h"
 
 typedef struct {
+  uint32_t proto_version;
+  uint32_t caps;
+  uint32_t can_channels;
+  uint32_t kline_channels;
+} pt_caps_t;
+
+typedef struct {
   pt_transport_t *t;
   uint8_t seq;
   char   last_error[96];
@@ -34,11 +41,14 @@ int32_t pt_set_prog_voltage(pt_handle_t *h, uint32_t pin, uint32_t millivolts);
 int32_t pt_read_vbatt(pt_handle_t *h, uint32_t *millivolts);
 
 int32_t pt_read_version(pt_handle_t *h, char *fw, char *dll, char *api);
+int32_t pt_get_caps(pt_handle_t *h, pt_caps_t *caps);
 
 
 int32_t pt_set_config(pt_handle_t *h, uint32_t channel_id, const SCONFIG *cfg, uint32_t n);
 int32_t pt_get_config(pt_handle_t *h, uint32_t channel_id, SCONFIG *cfg, uint32_t n);
 int32_t pt_ioctl_clear(pt_handle_t *h, uint32_t channel_id, uint32_t ioctl_id);
+int32_t pt_ioctl_bytes(pt_handle_t *h, uint32_t channel_id, uint32_t ioctl_id,
+             const uint8_t *in, uint32_t in_len, uint8_t *out, uint32_t *out_len);
 
 
 int32_t pt_start_periodic(pt_handle_t *h, uint32_t channel_id, const PASSTHRU_MSG *msg,

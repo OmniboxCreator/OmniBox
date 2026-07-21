@@ -80,6 +80,11 @@ static void ecu_queue(uint32_t id, const uint8_t *d, uint8_t n)
   ecu_qh = next;
 }
 
+void mock_bus_queue_can(uint32_t id, const uint8_t *data, uint8_t len)
+{
+  ecu_queue(id, data, len);
+}
+
 
 static uint16_t fill_pattern(uint8_t *p, uint16_t n)
 {

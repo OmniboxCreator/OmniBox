@@ -35,13 +35,6 @@ static int32_t pt_xfer(pt_handle_t *h, uint8_t cmd, const uint8_t *payload, uint
 }
 
 
-static uint32_t msg_id(const PASSTHRU_MSG *m)
-{
-  if (!m || m->DataSize < 4) return 0;
-  return ((uint32_t)m->Data[0] << 24) | ((uint32_t)m->Data[1] << 16) |
-      ((uint32_t)m->Data[2] << 8) | (uint32_t)m->Data[3];
-}
-
 int32_t pt_open(pt_handle_t *h, const char *name, uint32_t *device_id)
 {
   (void)name;
@@ -120,11 +113,21 @@ int32_t pt_start_filter(pt_handle_t *h, uint32_t channel_id, uint32_t type,
             const PASSTHRU_MSG *mask, const PASSTHRU_MSG *pattern,
             const PASSTHRU_MSG *flow, uint32_t *filter_id)
 {
-  uint8_t p[20];
+  if (!mask || !pattern || !flow) return J2534_ERR_NULL_PARAMETER;
+  uint8_t p[16 + 3 * (24 + J2534_DATA_MAX)];
   pt_wr32(p + 0, channel_id); pt_wr32(p + 4, type);
-  pt_wr32(p + 8, msg_id(mask)); pt_wr32(p + 12, msg_id(pattern)); pt_wr32(p + 16, msg_id(flow));
+  uint32_t off = 8;
+  int w = pt_wire_encode(p + off, (uint32_t)sizeof(p) - off, mask);
+  if (w < 0) return J2534_ERR_INVALID_MSG;
+  off += (uint32_t)w;
+  w = pt_wire_encode(p + off, (uint32_t)sizeof(p) - off, pattern);
+  if (w < 0) return J2534_ERR_INVALID_MSG;
+  off += (uint32_t)w;
+  w = pt_wire_encode(p + off, (uint32_t)sizeof(p) - off, flow);
+  if (w < 0) return J2534_ERR_INVALID_MSG;
+  off += (uint32_t)w;
   const uint8_t *d; uint16_t dl;
-  int32_t st = pt_xfer(h, CMD_START_FILTER, p, sizeof p, &d, &dl);
+  int32_t st = pt_xfer(h, CMD_START_FILTER, p, (uint16_t)off, &d, &dl);
   if (st == J2534_STATUS_NOERROR && filter_id && dl >= 4) *filter_id = pt_rd32(d);
   return st;
 }
@@ -182,6 +185,25 @@ int32_t pt_ioctl_clear(pt_handle_t *h, uint32_t channel_id, uint32_t ioctl_id)
   return pt_xfer(h, CMD_IOCTL, p, sizeof p, 0, 0);
 }
 
+int32_t pt_ioctl_bytes(pt_handle_t *h, uint32_t channel_id, uint32_t ioctl_id,
+             const uint8_t *in, uint32_t in_len, uint8_t *out, uint32_t *out_len)
+{
+  if (in_len > sizeof(h->pbuf) - 8u) return J2534_ERR_INVALID_MSG;
+  if (in_len && !in) return J2534_ERR_NULL_PARAMETER;
+  pt_wr32(h->pbuf + 0, channel_id);
+  pt_wr32(h->pbuf + 4, ioctl_id);
+  if (in_len) memcpy(h->pbuf + 8, in, in_len);
+  const uint8_t *d; uint16_t dl;
+  int32_t st = pt_xfer(h, CMD_IOCTL, h->pbuf, (uint16_t)(8u + in_len), &d, &dl);
+  if (st == J2534_STATUS_NOERROR && out_len) {
+    uint32_t copy = dl;
+    if (out && copy > *out_len) copy = *out_len;
+    if (out && copy) memcpy(out, d, copy);
+    *out_len = copy;
+  }
+  return st;
+}
+
 int32_t pt_start_periodic(pt_handle_t *h, uint32_t channel_id, const PASSTHRU_MSG *msg,
              uint32_t interval_ms, uint32_t *msg_id)
 {
@@ -226,5 +248,20 @@ int32_t pt_read_version(pt_handle_t *h, char *fw, char *dll, char *api)
     pull_str(api ? api : tmp, 80, d + off, (size_t)dl - off);
   }
   if (dll) snprintf(dll, 80, "OmniBox DLL 0.1 dev");
+  return st;
+}
+
+int32_t pt_get_caps(pt_handle_t *h, pt_caps_t *caps)
+{
+  if (!caps) return J2534_ERR_NULL_PARAMETER;
+  memset(caps, 0, sizeof(*caps));
+  const uint8_t *d; uint16_t dl;
+  int32_t st = pt_xfer(h, CMD_GET_CAPS, 0, 0, &d, &dl);
+  if (st == J2534_STATUS_NOERROR && dl >= 16) {
+    caps->proto_version = pt_rd32(d + 0);
+    caps->caps = pt_rd32(d + 4);
+    caps->can_channels = pt_rd32(d + 8);
+    caps->kline_channels = pt_rd32(d + 12);
+  }
   return st;
 }

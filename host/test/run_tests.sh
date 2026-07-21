@@ -21,6 +21,8 @@ run test_e2e test_e2e.c \
     $FW/j2534/j2534_wire.c $FW/j2534/kline_asm.c $FW/j2534/trace.c \
     $FW/transport/protocol.c
 
+run test_elm327 test_elm327.c $FW/elm327/elm327.c
+
 $CC $FLAGS -o /tmp/test_tcp test_tcp.c \
     ../ptcore/pt_core.c ../shared/pt_frame.c ../shared/pt_wire.c ../shared/transport_tcp.c \
     ../vdevice/vdevice.c ../vdevice/mock_bus.c ../vdevice/usb_mode_stub.c \

@@ -180,6 +180,16 @@ long WINAPI PassThruIoctl(unsigned long ChannelID, unsigned long IoctlID,
   case J2534_CLEAR_RX_BUFFER: case J2534_CLEAR_TX_BUFFER:
   case J2534_CLEAR_MSG_FILTERS: case J2534_CLEAR_PERIODIC_MSGS:
     return pt_ioctl_clear(&g_h, (uint32_t)ChannelID, (uint32_t)IoctlID);
+  case J2534_FIVE_BAUD_INIT:
+  case J2534_FAST_INIT: {
+    SBYTE_ARRAY *in = (SBYTE_ARRAY *)pInput;
+    SBYTE_ARRAY *out = (SBYTE_ARRAY *)pOutput;
+    uint32_t out_len = out ? out->NumOfBytes : 0;
+    long st = pt_ioctl_bytes(&g_h, (uint32_t)ChannelID, (uint32_t)IoctlID,
+                 in ? in->BytePtr : 0, in ? in->NumOfBytes : 0,
+                 out ? out->BytePtr : 0, out ? &out_len : 0);
+    if (out) out->NumOfBytes = out_len;
+    return st; }
   case J2534_READ_VBATT: {
     uint32_t mv = 0; long st = pt_read_vbatt(&g_h, &mv);
     if (pOutput) *(unsigned long *)pOutput = mv;
@@ -188,4 +198,38 @@ long WINAPI PassThruIoctl(unsigned long ChannelID, unsigned long IoctlID,
     dlog(" ! Ioctl id=0x%lX is not supported", IoctlID);
     return J2534_ERR_NOT_SUPPORTED;
   }
+}
+
+long WINAPI OmniBoxGetCaps(OMNIBOX_CAPS *pCaps)
+{
+  NEED_OPEN();
+  if (!pCaps) return J2534_ERR_NULL_PARAMETER;
+  pt_caps_t caps;
+  long st = pt_get_caps(&g_h, &caps);
+  if (st == J2534_STATUS_NOERROR) {
+    pCaps->ProtocolVersion = caps.proto_version;
+    pCaps->CapabilityFlags = caps.caps;
+    pCaps->CanChannels = caps.can_channels;
+    pCaps->KlineChannels = caps.kline_channels;
+  }
+  return st;
+}
+
+long WINAPI OmniBoxSetChannelConfig(unsigned long ChannelID,
+                       unsigned long Parameter, unsigned long Value)
+{
+  NEED_OPEN();
+  SCONFIG cfg = { (uint32_t)Parameter, (uint32_t)Value };
+  return pt_set_config(&g_h, (uint32_t)ChannelID, &cfg, 1);
+}
+
+long WINAPI OmniBoxGetChannelConfig(unsigned long ChannelID,
+                       unsigned long Parameter, unsigned long *pValue)
+{
+  NEED_OPEN();
+  if (!pValue) return J2534_ERR_NULL_PARAMETER;
+  SCONFIG cfg = { (uint32_t)Parameter, 0 };
+  long st = pt_get_config(&g_h, (uint32_t)ChannelID, &cfg, 1);
+  if (st == J2534_STATUS_NOERROR) *pValue = cfg.Value;
+  return st;
 }

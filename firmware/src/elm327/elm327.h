@@ -24,6 +24,7 @@ typedef struct {
 #define ELM327_DESC_STRING "OBDII to RS232 Interpreter"
 #define ELM327_LINE_MAX  64   
 #define ELM327_ST_DEFAULT 0x32  
+#define ELM327_ISOTP_MAX 512u
 
 
 enum {
@@ -88,6 +89,12 @@ typedef struct {
   uint8_t req_got;
   uint32_t req_start_ms;
   uint32_t req_last_rx_ms;
+
+  uint8_t tp_active;
+  uint8_t tp_sn;
+  uint16_t tp_len;
+  uint16_t tp_pos;
+  uint8_t tp_buf[ELM327_ISOTP_MAX];
 } elm327_t;
 
 #define ELM_CRA_NONE 0xFFFFFFFFu

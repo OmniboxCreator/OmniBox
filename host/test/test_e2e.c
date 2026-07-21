@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../ptcore/pt_core.h"
+#include "../shared/pt_proto.h"
 #include "../vdevice/vdevice.h"
 
 static int g_fail = 0, g_tests = 0;
@@ -119,7 +120,94 @@ static void test_e2e_config(void)
   CHECK(pt_set_config(&h, ch, set, 2) == J2534_STATUS_NOERROR, "SET_CONFIG BS/STMIN");
   SCONFIG get[2] = { { J2534_CFG_ISO15765_BS, 0 }, { J2534_CFG_ISO15765_STMIN, 0 } };
   CHECK(pt_get_config(&h, ch, get, 2) == J2534_STATUS_NOERROR, "GET_CONFIG");
-  CHECK(get[0].Value == 4 && get[1].Value == 10, "valeurs relues = BS 4, STmin 10");
+  CHECK(get[0].Value == 4 && get[1].Value == 10, "read-back values = BS 4, STmin 10");
+}
+
+static void test_e2e_caps_and_omni_config(void)
+{
+  printf("test_e2e_caps_and_omni_config\n");
+  pt_transport_t *t = vdevice_init();
+  pt_handle_t h; pt_init(&h, t);
+  pt_caps_t caps;
+  CHECK(pt_get_caps(&h, &caps) == J2534_STATUS_NOERROR, "GET_CAPS status");
+  CHECK(caps.proto_version == OMNIBOX_PROTO_VERSION, "protocol version");
+  CHECK((caps.caps & OMNI_CAP_J2534_ISO15765) != 0, "ISO15765 capability");
+  CHECK(caps.can_channels >= 5, "multi-CAN capability count");
+
+  uint32_t dev = 0, ch = 0;
+  CHECK(pt_open(&h, "vdev", &dev) == J2534_STATUS_NOERROR, "Open for Omni config");
+  CHECK(pt_connect(&h, dev, J2534_CAN, 0, 500000, &ch) == J2534_STATUS_NOERROR, "Connect CAN for Omni config");
+  SCONFIG set[4] = {
+    { OMNI_CFG_PHYSICAL_BUS, 2 },
+    { OMNI_CFG_TERMINATION, 1 },
+    { OMNI_CFG_CAN_SWAP, 1 },
+    { OMNI_CFG_CAN_DATA_RATE, 2000000 },
+  };
+  CHECK(pt_set_config(&h, ch, set, 4) == J2534_STATUS_NOERROR, "SET_CONFIG Omni params");
+  SCONFIG get[4] = {
+    { OMNI_CFG_PHYSICAL_BUS, 0 },
+    { OMNI_CFG_TERMINATION, 0 },
+    { OMNI_CFG_CAN_SWAP, 0 },
+    { OMNI_CFG_CAN_DATA_RATE, 0 },
+  };
+  CHECK(pt_get_config(&h, ch, get, 4) == J2534_STATUS_NOERROR, "GET_CONFIG Omni params");
+  CHECK(get[0].Value == 2 && get[1].Value == 1 && get[2].Value == 1 &&
+        get[3].Value == 2000000, "Omni params persisted");
+}
+
+static void test_e2e_payload_filter(void)
+{
+  printf("test_e2e_payload_filter\n");
+  pt_transport_t *t = vdevice_init();
+  pt_handle_t h; pt_init(&h, t);
+  uint32_t dev = 0, ch = 0, fid = 0;
+  CHECK(pt_open(&h, "vdev", &dev) == J2534_STATUS_NOERROR, "Open payload filter");
+  CHECK(pt_connect(&h, dev, J2534_CAN, 0, 500000, &ch) == J2534_STATUS_NOERROR, "Connect CAN payload filter");
+
+  PASSTHRU_MSG mask, pat, flow;
+  memset(&mask, 0, sizeof mask); memset(&pat, 0, sizeof pat); memset(&flow, 0, sizeof flow);
+  mask.ProtocolID = pat.ProtocolID = flow.ProtocolID = J2534_CAN;
+  mask.DataSize = pat.DataSize = flow.DataSize = 5;
+  mask.Data[2] = 0x07; mask.Data[3] = 0xFF; mask.Data[4] = 0xFF;
+  pat.Data[2] = 0x01; pat.Data[3] = 0x23; pat.Data[4] = 0xAA;
+  CHECK(pt_start_filter(&h, ch, J2534_PASS_FILTER, &mask, &pat, &flow, &fid) == J2534_STATUS_NOERROR,
+        "Start payload PASS filter");
+
+  uint8_t reject[2] = { 0x55, 0x01 };
+  mock_bus_queue_can(0x123, reject, 2);
+  pt_caps_t caps;
+  pt_get_caps(&h, &caps);
+  PASSTHRU_MSG out; uint32_t num = 1;
+  CHECK(pt_read_msgs(&h, ch, &out, &num, 20) == J2534_ERR_BUFFER_EMPTY, "payload mismatch rejected");
+
+  uint8_t accept[2] = { 0xAA, 0x02 };
+  mock_bus_queue_can(0x123, accept, 2);
+  pt_get_caps(&h, &caps);
+  num = 1;
+  CHECK(pt_read_msgs(&h, ch, &out, &num, 20) == J2534_STATUS_NOERROR && num == 1,
+        "payload match accepted");
+  CHECK(out.DataSize == 6 && out.Data[4] == 0xAA && out.Data[5] == 0x02, "payload preserved");
+}
+
+static void test_e2e_kline_init_ioctl_wire(void)
+{
+  printf("test_e2e_kline_init_ioctl_wire\n");
+  pt_transport_t *t = vdevice_init();
+  pt_handle_t h; pt_init(&h, t);
+  uint32_t dev = 0, ch = 0;
+  CHECK(pt_open(&h, "vdev", &dev) == J2534_STATUS_NOERROR, "Open K-line");
+  CHECK(pt_connect(&h, dev, J2534_ISO9141, 0, 10400, &ch) == J2534_STATUS_NOERROR, "Connect ISO9141");
+  uint8_t addr = 0x33;
+  uint8_t kb[2] = {0};
+  uint32_t out_len = sizeof(kb);
+  CHECK(pt_ioctl_bytes(&h, ch, J2534_FIVE_BAUD_INIT, &addr, 1, kb, &out_len) == J2534_STATUS_NOERROR,
+        "FIVE_BAUD_INIT transported");
+  CHECK(out_len == 2, "FIVE_BAUD_INIT keybyte count");
+  uint8_t wake[5] = { 0xC1, 0x33, 0xF1, 0x81, 0x66 };
+  uint8_t rsp[8] = {0};
+  out_len = sizeof(rsp);
+  CHECK(pt_ioctl_bytes(&h, ch, J2534_FAST_INIT, wake, sizeof(wake), rsp, &out_len) == J2534_STATUS_NOERROR,
+        "FAST_INIT transported");
 }
 
 
@@ -277,7 +365,7 @@ static void test_e2e_dump_read(void)
   fwrite(buf, 1, sizeof buf, f); fclose(f);
 
   pt_transport_t *t = vdevice_init();      
-  CHECK(mock_bus_load_dump(path, 0x80000000u) == 0, "chargement dump");
+  CHECK(mock_bus_load_dump(path, 0x80000000u) == 0, "dump loaded");
   pt_handle_t h; pt_init(&h, t);
   uint32_t dev = 0, ch = 0, fid = 0;
   pt_open(&h, "vdev", &dev);
@@ -296,7 +384,7 @@ static void test_e2e_dump_read(void)
   CHECK(st == J2534_STATUS_NOERROR && num == 1, "ReadMemoryByAddress dump");
   CHECK(resp.Data[4] == 0x63, "response positive 0x63");
   CHECK(resp.DataSize == (uint32_t)(4 + 1 + 16), "63 + 16 bytes");
-  CHECK(resp.Data[5] == 0x10 && resp.Data[5 + 15] == 0x1F, "real bytes du dump (0x10..0x1F)");
+  CHECK(resp.Data[5] == 0x10 && resp.Data[5 + 15] == 0x1F, "real dump bytes (0x10..0x1F)");
 
   
   uint8_t oor[10] = { 0x23, 0x44, 0x90,0x00,0x00,0x00, 0x00,0x00,0x00,0x10 };
@@ -316,6 +404,9 @@ int main(void)
   test_e2e_negative();
   test_e2e_vbatt();
   test_e2e_config();
+  test_e2e_caps_and_omni_config();
+  test_e2e_payload_filter();
+  test_e2e_kline_init_ioctl_wire();
   test_e2e_clear_filters();
   test_e2e_periodic();
   test_e2e_version();

@@ -28,6 +28,20 @@ enum {
   CMD_TEST_RELAY   = 0x10, 
   CMD_USB_MODE_GET  = 0x11, 
   CMD_USB_MODE_SET  = 0x12, 
+  CMD_GET_CAPS    = 0x13,
+};
+
+#define OMNIBOX_PROTO_VERSION 2u
+
+enum {
+  OMNI_CAP_J2534_CAN        = 1u << 0,
+  OMNI_CAP_J2534_ISO15765   = 1u << 1,
+  OMNI_CAP_MULTI_CAN        = 1u << 2,
+  OMNI_CAP_ROUTING_MATRIX   = 1u << 3,
+  OMNI_CAP_ELM327_CAN       = 1u << 4,
+  OMNI_CAP_KLINE_EXPERIMENTAL = 1u << 5,
+  OMNI_CAP_J1850_EXPERIMENTAL = 1u << 6,
+  OMNI_CAP_CANFD_EXPERIMENTAL = 1u << 7,
 };
 
 

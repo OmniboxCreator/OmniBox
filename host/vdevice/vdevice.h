@@ -18,5 +18,6 @@ int vdevice_handle_frame(const uint8_t *req, size_t n, uint8_t *resp, size_t cap
 
 
 int mock_bus_load_dump(const char *path, uint32_t base);
+void mock_bus_queue_can(uint32_t id, const uint8_t *data, uint8_t len);
 
 #endif 

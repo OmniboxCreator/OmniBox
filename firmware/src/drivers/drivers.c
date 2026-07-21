@@ -1,5 +1,6 @@
 
 #include "stm32h7xx_hal.h"
+#include <string.h>
 #include "drivers.h"
 #include "mcp2518fd.h"
 #include "../board/board.h"
@@ -347,7 +348,8 @@ int swcan_set_mode(uint8_t mode)
 static FDCAN_HandleTypeDef s_fdcan[3];
 static const uint32_t S_FDCAN_RAMOFF[3] = { 0u, 97u, 194u };  
 
-typedef struct { uint32_t id; uint8_t data[8]; uint8_t len; uint8_t ext; } can_frame_t;
+#define CAN_FRAME_DATA_MAX 64u
+typedef struct { uint32_t id; uint8_t data[CAN_FRAME_DATA_MAX]; uint8_t len; uint8_t ext; uint8_t fd; uint8_t brs; } can_frame_t;
 #define CAN_RX_DEPTH 32
 static volatile can_frame_t s_can_rx[3][CAN_RX_DEPTH];
 static volatile uint16_t s_can_rx_head[3], s_can_rx_tail[3];
@@ -372,7 +374,7 @@ static int fdcan_setup(uint8_t ch, uint32_t nominal_baud)
 
   FDCAN_HandleTypeDef *h = &s_fdcan[ch];
   h->Instance = inst;
-  h->Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  h->Init.FrameFormat = FDCAN_FRAME_FD_BRS;
   h->Init.Mode = FDCAN_MODE_NORMAL;
   h->Init.AutoRetransmission = ENABLE;
   h->Init.TransmitPause = DISABLE;
@@ -389,16 +391,16 @@ static int fdcan_setup(uint8_t ch, uint32_t nominal_baud)
   h->Init.StdFiltersNbr = 1;
   h->Init.ExtFiltersNbr = 0;
   h->Init.RxFifo0ElmtsNbr = 16;
-  h->Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
+  h->Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_64;
   h->Init.RxFifo1ElmtsNbr = 0;
   h->Init.RxFifo1ElmtSize = FDCAN_DATA_BYTES_8;
   h->Init.RxBuffersNbr = 0;
-  h->Init.RxBufferSize = FDCAN_DATA_BYTES_8;
+  h->Init.RxBufferSize = FDCAN_DATA_BYTES_64;
   h->Init.TxEventsNbr = 0;
   h->Init.TxBuffersNbr = 0;
   h->Init.TxFifoQueueElmtsNbr = 8;
   h->Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
-  h->Init.TxElmtSize = FDCAN_DATA_BYTES_8;
+  h->Init.TxElmtSize = FDCAN_DATA_BYTES_64;
   if (HAL_FDCAN_Init(h) != HAL_OK) return -1;
 
   
@@ -451,18 +453,41 @@ int can_tx(uint8_t ch, uint32_t id, const uint8_t *data, uint8_t len, uint32_t f
   if (ch > CAN_CH3)          
     return mcp_tx((uint8_t)(ch - CAN_CH4_MCP1), id, data, (len > 8) ? 8 : len,
            (flags & J2534_CAN_29BIT_ID) ? 1u : 0u);
-  if (len > 8) len = 8;
+  if (len > CAN_FRAME_DATA_MAX) len = CAN_FRAME_DATA_MAX;
+  uint8_t txdata[CAN_FRAME_DATA_MAX];
+  uint8_t payload_len = len;
+  memset(txdata, 0, sizeof(txdata));
+  if (data && len) memcpy(txdata, data, len);
   FDCAN_TxHeaderTypeDef t = {0};
   t.Identifier = id;
   t.IdType = (flags & J2534_CAN_29BIT_ID) ? FDCAN_EXTENDED_ID : FDCAN_STANDARD_ID;
   t.TxFrameType = FDCAN_DATA_FRAME;
-  t.DataLength = len;         
+  switch (payload_len) {
+  case 0: t.DataLength = FDCAN_DLC_BYTES_0; break;
+  case 1: t.DataLength = FDCAN_DLC_BYTES_1; break;
+  case 2: t.DataLength = FDCAN_DLC_BYTES_2; break;
+  case 3: t.DataLength = FDCAN_DLC_BYTES_3; break;
+  case 4: t.DataLength = FDCAN_DLC_BYTES_4; break;
+  case 5: t.DataLength = FDCAN_DLC_BYTES_5; break;
+  case 6: t.DataLength = FDCAN_DLC_BYTES_6; break;
+  case 7: t.DataLength = FDCAN_DLC_BYTES_7; break;
+  case 8: t.DataLength = FDCAN_DLC_BYTES_8; break;
+  default:
+    if (payload_len <= 12) t.DataLength = FDCAN_DLC_BYTES_12;
+    else if (payload_len <= 16) t.DataLength = FDCAN_DLC_BYTES_16;
+    else if (payload_len <= 20) t.DataLength = FDCAN_DLC_BYTES_20;
+    else if (payload_len <= 24) t.DataLength = FDCAN_DLC_BYTES_24;
+    else if (payload_len <= 32) t.DataLength = FDCAN_DLC_BYTES_32;
+    else if (payload_len <= 48) t.DataLength = FDCAN_DLC_BYTES_48;
+    else t.DataLength = FDCAN_DLC_BYTES_64;
+    break;
+  }
   t.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-  t.BitRateSwitch = FDCAN_BRS_OFF;
-  t.FDFormat = FDCAN_CLASSIC_CAN;
+  t.BitRateSwitch = (flags & OMNI_CAN_BRS) ? FDCAN_BRS_ON : FDCAN_BRS_OFF;
+  t.FDFormat = (flags & OMNI_CAN_FD_FRAME) ? FDCAN_FD_CAN : FDCAN_CLASSIC_CAN;
   t.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
   t.MessageMarker = 0;
-  return (HAL_FDCAN_AddMessageToTxFifoQ(&s_fdcan[ch], &t, (uint8_t *)data) == HAL_OK) ? 0 : -1;
+  return (HAL_FDCAN_AddMessageToTxFifoQ(&s_fdcan[ch], &t, txdata) == HAL_OK) ? 0 : -1;
 }
 
 
@@ -492,7 +517,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
          (hfdcan->Instance == FDCAN3) ? CAN_CH3 : 0xFFu;
   if (ch == 0xFFu) return;
   FDCAN_RxHeaderTypeDef rh;
-  uint8_t buf[8];
+  uint8_t buf[CAN_FRAME_DATA_MAX];
   while (HAL_FDCAN_GetRxFifoFillLevel(hfdcan, FDCAN_RX_FIFO0) > 0u) {
     if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &rh, buf) != HAL_OK) break;
     uint16_t next = (uint16_t)((s_can_rx_head[ch] + 1) % CAN_RX_DEPTH);
@@ -500,7 +525,26 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
     volatile can_frame_t *fr = &s_can_rx[ch][s_can_rx_head[ch]];
     fr->id = rh.Identifier;
     fr->ext = (rh.IdType == FDCAN_EXTENDED_ID) ? 1u : 0u;
-    fr->len = (uint8_t)((rh.DataLength <= 8u) ? rh.DataLength : 8u);
+    switch (rh.DataLength) {
+    case FDCAN_DLC_BYTES_0: fr->len = 0; break;
+    case FDCAN_DLC_BYTES_1: fr->len = 1; break;
+    case FDCAN_DLC_BYTES_2: fr->len = 2; break;
+    case FDCAN_DLC_BYTES_3: fr->len = 3; break;
+    case FDCAN_DLC_BYTES_4: fr->len = 4; break;
+    case FDCAN_DLC_BYTES_5: fr->len = 5; break;
+    case FDCAN_DLC_BYTES_6: fr->len = 6; break;
+    case FDCAN_DLC_BYTES_7: fr->len = 7; break;
+    case FDCAN_DLC_BYTES_8: fr->len = 8; break;
+    case FDCAN_DLC_BYTES_12: fr->len = 12; break;
+    case FDCAN_DLC_BYTES_16: fr->len = 16; break;
+    case FDCAN_DLC_BYTES_20: fr->len = 20; break;
+    case FDCAN_DLC_BYTES_24: fr->len = 24; break;
+    case FDCAN_DLC_BYTES_32: fr->len = 32; break;
+    case FDCAN_DLC_BYTES_48: fr->len = 48; break;
+    default: fr->len = 64; break;
+    }
+    fr->fd = (rh.FDFormat == FDCAN_FD_CAN) ? 1u : 0u;
+    fr->brs = (rh.BitRateSwitch == FDCAN_BRS_ON) ? 1u : 0u;
     for (uint8_t i = 0; i < fr->len; i++) fr->data[i] = buf[i];
     s_can_rx_head[ch] = next;
   }

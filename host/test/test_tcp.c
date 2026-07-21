@@ -49,7 +49,7 @@ int main(void)
   pthread_create(&th, 0, server_thread, 0);
 
   pt_transport_t *t = transport_tcp_connect("127.0.0.1", port);
-  CHECK(t != NULL, "client connected au device virtuel via TCP");
+  CHECK(t != NULL, "client connected to virtual device over TCP");
   if (t) {
     pt_handle_t h; pt_init(&h, t);
     uint32_t dev = 0, ch = 0, fid = 0;

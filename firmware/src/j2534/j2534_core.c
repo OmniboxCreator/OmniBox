@@ -16,7 +16,7 @@ static void trace_can_frame(uint8_t tag, uint8_t ch, uint32_t id, const uint8_t 
   b[2] = (uint8_t)(id >> 8); b[3] = (uint8_t)id;
   uint8_t m = (n > 8u) ? 8u : n;
   for (uint8_t i = 0; i < m; i++) b[4 + i] = d[i];
-  trace_record(tag, ch, 0, board_micros(), b, (uint16_t)(4u + m));  
+  trace_record(tag, ch, 0, board_micros(), b, (uint16_t)(4u + m));
 }
 static void trace_bytes(uint8_t tag, uint8_t ch, const uint8_t *d, uint16_t n)
 {
@@ -34,33 +34,33 @@ static void trace_event(uint8_t ch, uint8_t code)
 
 
 #define J2534_ISOTP_LINKS 2
-#define J2534_ISOTP_BUF  J2534_MSG_DATA_MAX  
+#define J2534_ISOTP_BUF  J2534_MSG_DATA_MAX
 
 typedef struct {
   uint8_t in_use;
-  uint8_t ch_id;     
-  uint8_t can_phys;    
-  uint32_t tx_id;     
-  uint32_t rx_id;     
-  uint32_t tx_flags;    
+  uint8_t ch_id;
+  uint8_t can_phys;
+  uint32_t tx_id;
+  uint32_t rx_id;
+  uint32_t tx_flags;
   isotp_t tp;
-  uint8_t rxbuf[J2534_ISOTP_BUF];  
-  uint8_t txbuf[J2534_ISOTP_BUF];  
-  uint32_t next_cf_ms;   
-  uint32_t n_bs_deadline; 
-  uint32_t n_cr_deadline; 
-  uint8_t tx_active;   
-  uint8_t pad;      
+  uint8_t rxbuf[J2534_ISOTP_BUF];
+  uint8_t txbuf[J2534_ISOTP_BUF];
+  uint32_t next_cf_ms;
+  uint32_t n_bs_deadline;
+  uint32_t n_cr_deadline;
+  uint8_t tx_active;
+  uint8_t pad;
 } isotp_link_t;
 
-#define J2534_ISO15765_PAD_BYTE 0x00u  
+#define J2534_ISO15765_PAD_BYTE 0x00u
 
 
-#define J2534_N_BS_MS 1000u  
-#define J2534_N_CR_MS 1000u  
+#define J2534_N_BS_MS 1000u
+#define J2534_N_CR_MS 1000u
 
 static isotp_link_t s_links[J2534_ISOTP_LINKS];
-static kline_asm_t s_kasm[KLINE_CH_COUNT];   
+static kline_asm_t s_kasm[KLINE_CH_COUNT];
 static j2534_channel_t s_ch[J2534_MAX_CHANNELS];
 static int s_open;
 
@@ -103,6 +103,14 @@ static uint32_t id_be(const uint8_t *d, uint32_t n)
   if (n < 4) return 0;
   return ((uint32_t)d[0] << 24) | ((uint32_t)d[1] << 16) |
       ((uint32_t)d[2] << 8) | (uint32_t)d[3];
+}
+
+static uint16_t copy_filter_data(uint8_t *dst, const j2534_msg_t *m)
+{
+  uint32_t n = m ? m->data_size : 0u;
+  if (n > J2534_FILTER_DATA_MAX) n = J2534_FILTER_DATA_MAX;
+  if (n && m) memcpy(dst, m->data, n);
+  return (uint16_t)n;
 }
 
 void j2534_init(void)
@@ -157,13 +165,13 @@ uint8_t j2534_connect(uint16_t protocol_id, uint32_t flags, uint32_t baud, uint3
     j2534_channel_t *c = &s_ch[i];
     memset(c, 0, sizeof(*c));
     c->in_use = 1; c->protocol_id = protocol_id; c->flags = flags; c->baudrate = baud;
-    c->can_phys = 0xFF;    
-    c->kline_phys = 0xFF;   
-    
+    c->can_phys = 0xFF;
+    c->kline_phys = 0xFF;
+
     switch (protocol_id) {
     case J2534_CAN: case J2534_ISO15765:
     case J2534_CAN_PS: case J2534_ISO15765_PS:
-      c->can_phys = CAN_CH1;              
+      c->can_phys = CAN_CH1;
       if (can_open(CAN_CH1, baud, baud, flags) != 0) { c->in_use = 0; return J2534_ERR_FAILED; }
       break;
     case J2534_SW_CAN_PS: case J2534_SW_ISO15765_PS:
@@ -173,9 +181,9 @@ uint8_t j2534_connect(uint16_t protocol_id, uint32_t flags, uint32_t baud, uint3
       break;
     case J2534_ISO9141: case J2534_ISO14230:
     case J2534_ISO9141_PS: case J2534_ISO14230_PS:
-      c->kline_phys = KLINE_CH1;            
-      kline_asm_reset(&s_kasm[KLINE_CH1]);       
-      kline_asm_set_mode(&s_kasm[KLINE_CH1],     
+      c->kline_phys = KLINE_CH1;
+      kline_asm_reset(&s_kasm[KLINE_CH1]);
+      kline_asm_set_mode(&s_kasm[KLINE_CH1],
         (protocol_id == J2534_ISO14230 || protocol_id == J2534_ISO14230_PS)
           ? KLINE_MODE_ISO14230 : KLINE_MODE_TIMING);
       kline_open(KLINE_CH1, baud ? baud : 10400); break;
@@ -202,7 +210,7 @@ uint8_t j2534_disconnect(uint32_t channel_id)
   j2534_channel_t *c = chan(channel_id);
   if (!c) return J2534_ERR_INVALID_CHANNEL_ID;
   free_links_of(channel_id);
-  chan_rx_clear(c);     
+  chan_rx_clear(c);
   c->in_use = 0;
   return J2534_STATUS_NOERROR;
 }
@@ -217,40 +225,62 @@ static isotp_link_t *link_alloc(void)
 }
 static int link_index(const isotp_link_t *lk) { return (int)(lk - s_links); }
 
-uint8_t j2534_start_filter(uint32_t channel_id, uint8_t type,
-              uint32_t mask_id, uint32_t pattern_id, uint32_t fc_id,
-              uint32_t *filter_id)
+uint8_t j2534_start_filter_msg(uint32_t channel_id, uint8_t type,
+                  const j2534_msg_t *mask, const j2534_msg_t *pattern,
+                  const j2534_msg_t *flow, uint32_t *filter_id)
 {
   j2534_channel_t *c = chan(channel_id);
   if (!c) return J2534_ERR_INVALID_CHANNEL_ID;
+  if (!mask || !pattern || !flow) return J2534_ERR_NULL_PARAMETER;
   if (type != J2534_PASS_FILTER && type != J2534_BLOCK_FILTER &&
     type != J2534_FLOW_CONTROL_FILTER)
     return J2534_ERR_INVALID_MSG;
   if (type == J2534_FLOW_CONTROL_FILTER && !is_iso15765(c->protocol_id))
     return J2534_ERR_INVALID_MSG;
 
-  for (uint32_t i = 0; i < J2534_MAX_FILTERS; i++) {
-    if (c->filters[i].type != 0) continue;      
-    j2534_filter_t *f = &c->filters[i];
-    f->mask  = mask_id;
-    f->pattern = pattern_id;
-    f->link  = -1;
-    if (type == J2534_FLOW_CONTROL_FILTER) {
-      isotp_link_t *lk = link_alloc();
-      if (!lk) return J2534_ERR_FAILED;       
-      memset(lk, 0, sizeof(*lk));
-      lk->in_use = 1; lk->ch_id = (uint8_t)channel_id; lk->can_phys = c->can_phys;
-      lk->tx_id = fc_id;
-      lk->rx_id = pattern_id;
-      isotp_init(&lk->tp, lk->rxbuf, sizeof(lk->rxbuf), 0, 0); 
-      f->fc_id = fc_id;
-      f->link = (int8_t)link_index(lk);
-    }
-    f->type = type;      
+	  for (uint32_t i = 0; i < J2534_MAX_FILTERS; i++) {
+	    if (c->filters[i].type != 0) continue;
+	    j2534_filter_t *f = &c->filters[i];
+	    f->mask  = id_be(mask->data, mask->data_size);
+	    f->pattern = id_be(pattern->data, pattern->data_size);
+	    f->link  = -1;
+	    f->mask_len = copy_filter_data(f->mask_data, mask);
+	    f->pattern_len = copy_filter_data(f->pattern_data, pattern);
+	    f->flow_len = copy_filter_data(f->flow_data, flow);
+	    if (type == J2534_FLOW_CONTROL_FILTER) {
+	      isotp_link_t *lk = link_alloc();
+	      if (!lk) return J2534_ERR_FAILED;
+	      memset(lk, 0, sizeof(*lk));
+	      lk->in_use = 1; lk->ch_id = (uint8_t)channel_id; lk->can_phys = c->can_phys;
+	      lk->tx_id = id_be(flow->data, flow->data_size);
+	      lk->rx_id = f->pattern;
+	      isotp_init(&lk->tp, lk->rxbuf, sizeof(lk->rxbuf), 0, 0);
+	      f->fc_id = lk->tx_id;
+	      f->link = (int8_t)link_index(lk);
+	    }
+    f->type = type;
     if (filter_id) *filter_id = i;
     return J2534_STATUS_NOERROR;
   }
-  return J2534_ERR_FAILED;    
+	  return J2534_ERR_FAILED;
+}
+
+uint8_t j2534_start_filter(uint32_t channel_id, uint8_t type,
+              uint32_t mask_id, uint32_t pattern_id, uint32_t fc_id,
+              uint32_t *filter_id)
+{
+  j2534_msg_t mask, pattern, flow;
+  memset(&mask, 0, sizeof(mask));
+  memset(&pattern, 0, sizeof(pattern));
+  memset(&flow, 0, sizeof(flow));
+  mask.data_size = pattern.data_size = flow.data_size = 4;
+  mask.data[0] = (uint8_t)(mask_id >> 24); mask.data[1] = (uint8_t)(mask_id >> 16);
+  mask.data[2] = (uint8_t)(mask_id >> 8); mask.data[3] = (uint8_t)mask_id;
+  pattern.data[0] = (uint8_t)(pattern_id >> 24); pattern.data[1] = (uint8_t)(pattern_id >> 16);
+  pattern.data[2] = (uint8_t)(pattern_id >> 8); pattern.data[3] = (uint8_t)pattern_id;
+  flow.data[0] = (uint8_t)(fc_id >> 24); flow.data[1] = (uint8_t)(fc_id >> 16);
+  flow.data[2] = (uint8_t)(fc_id >> 8); flow.data[3] = (uint8_t)fc_id;
+  return j2534_start_filter_msg(channel_id, type, &mask, &pattern, &flow, filter_id);
 }
 
 uint8_t j2534_stop_filter(uint32_t channel_id, uint32_t filter_id)
@@ -283,12 +313,12 @@ uint8_t j2534_start_periodic(uint32_t channel_id, const uint8_t *data, uint16_t 
     pm->tx_flags = tx_flags;
     pm->len = len;
     memcpy(pm->data, data, len);
-    pm->last_ms = board_millis();     
+    pm->last_ms = board_millis();
     pm->in_use = 1;
     if (msg_id) *msg_id = i;
     return J2534_STATUS_NOERROR;
   }
-  return J2534_ERR_FAILED;           
+  return J2534_ERR_FAILED;
 }
 
 uint8_t j2534_stop_periodic(uint32_t channel_id, uint32_t msg_id)
@@ -354,9 +384,9 @@ uint8_t j2534_read_msgs(uint32_t channel_id, j2534_msg_t *out, uint32_t *count, 
     }
   }
   *count = got;
-  if (c->rx_overflow) {       
+  if (c->rx_overflow) {
     c->rx_overflow = 0;
-    return J2534_ERR_BUFFER_OVERFLOW;  
+    return J2534_ERR_BUFFER_OVERFLOW;
   }
   return got ? J2534_STATUS_NOERROR : J2534_ERR_BUFFER_EMPTY;
 }
@@ -383,10 +413,10 @@ static uint8_t iso15765_write(j2534_channel_t *c, uint32_t tx_flags, const uint8
   if (plen == 0) return J2534_ERR_INVALID_MSG;
   int fi = j2534_find_flow_by_tx(c->filters, J2534_MAX_FILTERS, id);
   if (fi < 0) {
-    
+
     if (plen > 7u) return J2534_ERR_INVALID_MSG;
     uint8_t sf[8];
-    sf[0] = (uint8_t)plen;              
+    sf[0] = (uint8_t)plen;
     memcpy(sf + 1, data + 4, plen);
     uint8_t flen = (uint8_t)(1u + plen);
     if (tx_flags & J2534_ISO15765_FRAME_PAD) {
@@ -400,16 +430,17 @@ static uint8_t iso15765_write(j2534_channel_t *c, uint32_t tx_flags, const uint8
   isotp_link_t *lk = &s_links[c->filters[fi].link];
   if (plen > sizeof(lk->txbuf)) return J2534_ERR_INVALID_MSG;
   memcpy(lk->txbuf, data + 4, plen);
-  lk->tx_flags = tx_flags;
+	    lk->tx_flags = tx_flags;
+	    if (c->can_fd) lk->tx_flags |= OMNI_CAN_FD_FRAME;
   lk->pad = (tx_flags & J2534_ISO15765_FRAME_PAD) ? 1u : 0u;
   isotp_frame_t f;
   if (!isotp_send_start(&lk->tp, lk->txbuf, plen, &f)) return J2534_ERR_INVALID_MSG;
   link_can_tx(lk, f.data, f.len);
-  if (lk->tp.tx_state == ISOTP_TX_WAIT_FC) {      
+  if (lk->tp.tx_state == ISOTP_TX_WAIT_FC) {
     lk->tx_active = 1u;
     lk->n_bs_deadline = board_millis() + J2534_N_BS_MS;
   } else {
-    lk->tx_active = 0u;               
+    lk->tx_active = 0u;
   }
   return J2534_STATUS_NOERROR;
 }
@@ -419,11 +450,12 @@ static uint8_t j2534_tx_one(j2534_channel_t *c, uint32_t tx_flags, const uint8_t
 {
   switch (c->protocol_id) {
   case J2534_ISO15765: case J2534_ISO15765_PS: case J2534_SW_ISO15765_PS:
-    return iso15765_write(c, tx_flags, data, n);  
-  case J2534_CAN: case J2534_CAN_PS:
-    trace_can_frame(TRACE_BUS_TX, c->can_phys, id_be(data, n), data + 4, (uint8_t)(n > 4 ? n - 4 : 0));
-    can_tx(c->can_phys, id_be(data, n), data + 4, (uint8_t)(n > 4 ? n - 4 : 0), tx_flags);
-    return J2534_STATUS_NOERROR;
+    return iso15765_write(c, tx_flags, data, n);
+	  case J2534_CAN: case J2534_CAN_PS:
+	    trace_can_frame(TRACE_BUS_TX, c->can_phys, id_be(data, n), data + 4, (uint8_t)(n > 4 ? n - 4 : 0));
+	    can_tx(c->can_phys, id_be(data, n), data + 4, (uint8_t)(n > 4 ? n - 4 : 0),
+	        tx_flags | (c->can_fd ? OMNI_CAN_FD_FRAME : 0u));
+	    return J2534_STATUS_NOERROR;
   case J2534_ISO9141: case J2534_ISO14230:
     trace_bytes(TRACE_BUS_TX, c->kline_phys, data, n);
     kline_tx(c->kline_phys, data, n); return J2534_STATUS_NOERROR;
@@ -434,7 +466,7 @@ static uint8_t j2534_tx_one(j2534_channel_t *c, uint32_t tx_flags, const uint8_t
   }
 }
 
-static j2534_msg_t s_loopback;   
+static j2534_msg_t s_loopback;
 
 uint8_t j2534_write_msgs(uint32_t channel_id, const j2534_msg_t *in, uint32_t count, uint32_t timeout_ms)
 {
@@ -444,7 +476,7 @@ uint8_t j2534_write_msgs(uint32_t channel_id, const j2534_msg_t *in, uint32_t co
   for (uint32_t i = 0; i < count; i++) {
     uint8_t rc = j2534_tx_one(c, in[i].tx_flags, in[i].data, (uint16_t)in[i].data_size);
     if (rc != J2534_STATUS_NOERROR) return rc;
-    if (c->loopback) {       
+    if (c->loopback) {
       s_loopback = in[i];
       s_loopback.rx_status |= J2534_TX_MSG_TYPE;
       j2534_rx_push(channel_id, &s_loopback);
@@ -476,10 +508,31 @@ static void apply_config(j2534_channel_t *c, uint32_t param, uint32_t value)
     c->cfg_bs = (uint8_t)value; chan_links_set_fc(c, 1, (uint8_t)value, 0, 0); break;
   case J2534_CFG_ISO15765_STMIN: case J2534_CFG_STMIN_TX:
     c->cfg_stmin = (uint8_t)value; chan_links_set_fc(c, 0, 0, 1, (uint8_t)value); break;
-  case J2534_CFG_LOOPBACK: c->loopback = value ? 1u : 0u; break;
-  case J2534_CFG_DATA_RATE: c->baudrate = value; break; 
-  default: break;                    
-  }
+	  case J2534_CFG_LOOPBACK: c->loopback = value ? 1u : 0u; break;
+	  case J2534_CFG_DATA_RATE:
+	    c->baudrate = value;
+	    if (c->can_phys != 0xFF) can_open(c->can_phys, c->baudrate, c->data_baudrate, c->flags);
+	    else if (c->kline_phys != 0xFF) kline_open(c->kline_phys, c->baudrate);
+	    break;
+	  case OMNI_CFG_PHYSICAL_BUS:
+	    if (value < CAN_CH_COUNT) {
+	      if (c->can_phys != 0xFF) can_close(c->can_phys);
+	      c->can_phys = (uint8_t)value;
+	      can_open(c->can_phys, c->baudrate, c->data_baudrate, c->flags);
+	    }
+	    break;
+	  case OMNI_CFG_OBD_PIN:
+	    c->obd_pin = (uint8_t)value;
+	    if (c->can_phys >= CAN_CH2 && c->can_phys <= CAN_CH4_MCP1) matrix_can_connect(c->can_phys + 1u);
+	    else if (c->kline_phys == KLINE_CH2 || c->kline_phys == KLINE_CH3) matrix_kline_route(c->kline_phys + 1u, c->obd_pin);
+	    break;
+	  case OMNI_CFG_TERMINATION: c->termination = value ? 1u : 0u; matrix_can1_termination(c->termination); break;
+	  case OMNI_CFG_CAN_SWAP: c->can_swap = value ? 1u : 0u; matrix_can1_polarity_swap(c->can_swap); break;
+	  case OMNI_CFG_CAN_DATA_RATE: c->data_baudrate = value; if (c->can_phys != 0xFF) can_open(c->can_phys, c->baudrate, c->data_baudrate, c->flags); break;
+	  case OMNI_CFG_CAN_FD: c->can_fd = value ? 1u : 0u; break;
+	  case OMNI_CFG_SWCAN_MODE: c->swcan_mode = (uint8_t)value; swcan_set_mode(c->swcan_mode); break;
+	  default: break;
+	  }
 }
 
 static uint32_t read_config(const j2534_channel_t *c, uint32_t param)
@@ -487,16 +540,23 @@ static uint32_t read_config(const j2534_channel_t *c, uint32_t param)
   switch (param) {
   case J2534_CFG_ISO15765_BS: case J2534_CFG_BS_TX:    return c->cfg_bs;
   case J2534_CFG_ISO15765_STMIN: case J2534_CFG_STMIN_TX: return c->cfg_stmin;
-  case J2534_CFG_LOOPBACK:                return c->loopback;
-  case J2534_CFG_DATA_RATE:                return c->baudrate;
-  default: return 0;
-  }
+	  case J2534_CFG_LOOPBACK:                return c->loopback;
+	  case J2534_CFG_DATA_RATE:                return c->baudrate;
+	  case OMNI_CFG_PHYSICAL_BUS:              return c->can_phys == 0xFF ? 0xFFFFFFFFu : c->can_phys;
+	  case OMNI_CFG_OBD_PIN:                return c->obd_pin;
+	  case OMNI_CFG_TERMINATION:              return c->termination;
+	  case OMNI_CFG_CAN_SWAP:                return c->can_swap;
+	  case OMNI_CFG_CAN_DATA_RATE:             return c->data_baudrate;
+	  case OMNI_CFG_CAN_FD:                 return c->can_fd;
+	  case OMNI_CFG_SWCAN_MODE:              return c->swcan_mode;
+	  default: return 0;
+	  }
 }
 
 uint8_t j2534_ioctl(uint32_t channel_id, uint32_t ioctl_id,
           const uint8_t *in, uint16_t in_len, uint8_t *out, uint16_t *out_len)
 {
-  
+
   if (ioctl_id == J2534_READ_VBATT || ioctl_id == J2534_READ_PROG_VOLTAGE) {
     uint32_t mv = 0;
     if (ioctl_id == J2534_READ_VBATT) feps_read_vbatt_mv(&mv); else feps_read_prog_mv(&mv);
@@ -549,9 +609,24 @@ uint8_t j2534_ioctl(uint32_t channel_id, uint32_t ioctl_id,
   case J2534_CLEAR_PERIODIC_MSGS:
     memset(c->periodics, 0, sizeof(c->periodics));
     return J2534_STATUS_NOERROR;
-  case J2534_FIVE_BAUD_INIT: 
-  case J2534_FAST_INIT:    
-    return J2534_ERR_NOT_SUPPORTED;
+	  case J2534_FIVE_BAUD_INIT:
+	    if (!is_kline(c->protocol_id) || c->kline_phys == 0xFF) return J2534_ERR_NOT_SUPPORTED;
+	    if (!in || in_len < 1 || !out || !out_len || *out_len < 2) return J2534_ERR_NULL_PARAMETER;
+	    {
+	      uint8_t kb[2] = {0, 0};
+	      if (kline_five_baud_init(c->kline_phys, in[0], kb) != 0) return J2534_ERR_FAILED;
+	      out[0] = kb[0]; out[1] = kb[1]; *out_len = 2;
+	      return J2534_STATUS_NOERROR;
+	    }
+	  case J2534_FAST_INIT:
+	    if (!is_kline(c->protocol_id) || c->kline_phys == 0xFF) return J2534_ERR_NOT_SUPPORTED;
+	    if (!out_len) return J2534_ERR_NULL_PARAMETER;
+	    {
+	      uint8_t rn = (uint8_t)*out_len;
+	      if (kline_fast_init(c->kline_phys, in, (uint8_t)in_len, out, &rn) != 0) return J2534_ERR_FAILED;
+	      *out_len = rn;
+	      return J2534_STATUS_NOERROR;
+	    }
   default: return J2534_ERR_NOT_SUPPORTED;
   }
 }
@@ -578,39 +653,39 @@ static void push_isotp_msg(const j2534_channel_t *c, uint32_t ch_id, isotp_link_
 {
   j2534_msg_t m; memset(&m, 0, sizeof(m));
   m.protocol_id = c->protocol_id;
-  if (lk->rx_id > 0x7FFu) m.rx_status |= J2534_CAN_29BIT_ID;  
+  if (lk->rx_id > 0x7FFu) m.rx_status |= J2534_CAN_29BIT_ID;
   m.data[0] = (uint8_t)(lk->rx_id >> 24); m.data[1] = (uint8_t)(lk->rx_id >> 16);
   m.data[2] = (uint8_t)(lk->rx_id >> 8); m.data[3] = (uint8_t)lk->rx_id;
   uint16_t n = lk->tp.rx_len;
   if (n > (J2534_MSG_DATA_MAX - 4)) n = J2534_MSG_DATA_MAX - 4;
   memcpy(m.data + 4, lk->rxbuf, n);
   m.data_size = 4u + n;
-  m.extra_data_index = m.data_size;  
+  m.extra_data_index = m.data_size;
   j2534_rx_push(ch_id, &m);
-  lk->tp.rx_done = 0; lk->tp.rx_state = ISOTP_RX_IDLE;  
+  lk->tp.rx_done = 0; lk->tp.rx_state = ISOTP_RX_IDLE;
 }
 
 
 static void j2534_drain_can(uint32_t ch_id, j2534_channel_t *c)
 {
-  uint32_t id; uint8_t data[8], len, ext;
+	  uint32_t id; uint8_t data[64], len, ext;
   while (can_read(c->can_phys, &id, data, &len, &ext)) {
     trace_can_frame(TRACE_BUS_RX, c->can_phys, id, data, len);
     if (is_iso15765(c->protocol_id)) {
       int fi = j2534_find_flow_by_rx(c->filters, J2534_MAX_FILTERS, id);
-      if (fi < 0) continue;             
+      if (fi < 0) continue;
       isotp_link_t *lk = &s_links[c->filters[fi].link];
       isotp_frame_t out; int send = 0;
       int done = isotp_rx(&lk->tp, data, len, &out, &send);
       if (send) link_can_tx(lk, out.data, out.len);
       if (done) push_isotp_msg(c, ch_id, lk);
-      
+
       if (lk->tp.rx_state == ISOTP_RX_RECV) lk->n_cr_deadline = board_millis() + J2534_N_CR_MS;
-      
+
       if (lk->tp.tx_state == ISOTP_TX_SEND_CF) { lk->tx_active = 1; lk->next_cf_ms = board_millis(); }
       continue;
     }
-    if (!j2534_filters_accept(c->filters, J2534_MAX_FILTERS, id)) continue;
+	    if (!j2534_filters_accept_msg(c->filters, J2534_MAX_FILTERS, id, data, len)) continue;
     j2534_msg_t m; memset(&m, 0, sizeof(m));
     m.protocol_id = c->protocol_id;
     if (ext) m.rx_status |= J2534_CAN_29BIT_ID;
@@ -644,10 +719,10 @@ static void j2534_drain_kline(uint32_t ch_id, j2534_channel_t *c)
   uint8_t b;
   while (kline_read(c->kline_phys, &b)) {
     kline_asm_push(a, b, board_millis());
-    if (kline_asm_ready_len(a))       
-      kline_push_msg(ch_id, c, a);    
+    if (kline_asm_ready_len(a))
+      kline_push_msg(ch_id, c, a);
   }
-  
+
   if (kline_asm_ready(a, board_millis(), J2534_KLINE_GAP_MS))
     kline_push_msg(ch_id, c, a);
 }
@@ -675,16 +750,16 @@ static void j2534_pace_isotp_tx(void)
   for (int i = 0; i < J2534_ISOTP_LINKS; i++) {
     isotp_link_t *lk = &s_links[i];
     if (!lk->in_use || !lk->tx_active) continue;
-    if (lk->tp.tx_state != ISOTP_TX_SEND_CF) continue;  
-    if ((int32_t)(now - lk->next_cf_ms) < 0) continue;  
+    if (lk->tp.tx_state != ISOTP_TX_SEND_CF) continue;
+    if ((int32_t)(now - lk->next_cf_ms) < 0) continue;
     isotp_frame_t f;
     if (isotp_send_next(&lk->tp, &f)) {
       link_can_tx(lk, f.data, f.len);
       lk->next_cf_ms = now + isotp_stmin_to_ms(lk->tp.tx_stmin);
     }
-    if (lk->tp.tx_state == ISOTP_TX_IDLE)    lk->tx_active = 0; 
-    else if (lk->tp.tx_state == ISOTP_TX_WAIT_FC)          
-      lk->n_bs_deadline = now + J2534_N_BS_MS;    
+    if (lk->tp.tx_state == ISOTP_TX_IDLE)    lk->tx_active = 0;
+    else if (lk->tp.tx_state == ISOTP_TX_WAIT_FC)
+      lk->n_bs_deadline = now + J2534_N_BS_MS;
   }
 }
 
@@ -697,12 +772,12 @@ static void j2534_check_isotp_timeouts(void)
     if (!lk->in_use) continue;
     if (lk->tx_active && lk->tp.tx_state == ISOTP_TX_WAIT_FC &&
       (int32_t)(now - lk->n_bs_deadline) >= 0) {
-      lk->tp.tx_state = ISOTP_TX_IDLE; lk->tx_active = 0;     
+      lk->tp.tx_state = ISOTP_TX_IDLE; lk->tx_active = 0;
       trace_event(lk->can_phys, TRACE_EVT_NBS_TIMEOUT);
     }
     if (lk->tp.rx_state == ISOTP_RX_RECV &&
       (int32_t)(now - lk->n_cr_deadline) >= 0) {
-      lk->tp.rx_state = ISOTP_RX_IDLE; lk->tp.rx_done = 0;     
+      lk->tp.rx_state = ISOTP_RX_IDLE; lk->tp.rx_done = 0;
       trace_event(lk->can_phys, TRACE_EVT_NCR_TIMEOUT);
     }
   }

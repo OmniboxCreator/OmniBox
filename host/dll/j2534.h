@@ -16,6 +16,13 @@
 extern "C" {
 #endif
 
+typedef struct {
+  unsigned long ProtocolVersion;
+  unsigned long CapabilityFlags;
+  unsigned long CanChannels;
+  unsigned long KlineChannels;
+} OMNIBOX_CAPS;
+
 J2534_API long WINAPI PassThruOpen(void *pName, unsigned long *pDeviceID);
 J2534_API long WINAPI PassThruClose(unsigned long DeviceID);
 J2534_API long WINAPI PassThruConnect(unsigned long DeviceID, unsigned long ProtocolID,
@@ -39,6 +46,11 @@ J2534_API long WINAPI PassThruReadVersion(unsigned long DeviceID, char *pFirmwar
 J2534_API long WINAPI PassThruGetLastError(char *pErrorDescription);
 J2534_API long WINAPI PassThruIoctl(unsigned long ChannelID, unsigned long IoctlID,
                   void *pInput, void *pOutput);
+J2534_API long WINAPI OmniBoxGetCaps(OMNIBOX_CAPS *pCaps);
+J2534_API long WINAPI OmniBoxSetChannelConfig(unsigned long ChannelID,
+                       unsigned long Parameter, unsigned long Value);
+J2534_API long WINAPI OmniBoxGetChannelConfig(unsigned long ChannelID,
+                       unsigned long Parameter, unsigned long *pValue);
 
 #ifdef __cplusplus
 }

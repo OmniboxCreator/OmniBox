@@ -42,6 +42,12 @@ typedef struct {
   uint8_t cfg_bs;     
   uint8_t cfg_stmin;    
   uint8_t loopback;    
+  uint8_t obd_pin;
+  uint8_t termination;
+  uint8_t can_swap;
+  uint8_t can_fd;
+  uint8_t swcan_mode;
+  uint32_t data_baudrate;
   
   j2534_rx_slot_t rxq[J2534_RXQ_DEPTH];
   uint16_t rx_head, rx_tail;
@@ -65,8 +71,11 @@ uint8_t j2534_write_msgs(uint32_t channel_id, const j2534_msg_t *in, uint32_t co
 
 
 uint8_t j2534_start_filter(uint32_t channel_id, uint8_t type,
-              uint32_t mask_id, uint32_t pattern_id, uint32_t fc_id,
-              uint32_t *filter_id);
+	              uint32_t mask_id, uint32_t pattern_id, uint32_t fc_id,
+	              uint32_t *filter_id);
+uint8_t j2534_start_filter_msg(uint32_t channel_id, uint8_t type,
+                  const j2534_msg_t *mask, const j2534_msg_t *pattern,
+                  const j2534_msg_t *flow, uint32_t *filter_id);
 uint8_t j2534_stop_filter(uint32_t channel_id, uint32_t filter_id);
 
 
