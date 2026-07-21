@@ -9,8 +9,8 @@ serious diagnostic, protocol research and ECU reprogramming workflows.
 
 ![OmniBox V1 board render](docs/images/omnibox-v1-board-iso-complete.png)
 
-[![Board](https://img.shields.io/badge/board-1.0%20beta-black)](https://github.com/proxynet2017/OmniBox/releases/tag/hardware-v1.0-beta)
-[![Firmware](https://img.shields.io/badge/firmware-0.1%20dev-orange)](https://github.com/proxynet2017/OmniBox/releases/tag/firmware-v0.1-dev)
+[![Board](https://img.shields.io/badge/board-1.0%20beta-black)](https://github.com/OmniboxCreator/OmniBox/releases/tag/hardware-v1.0-beta)
+[![Firmware](https://img.shields.io/badge/firmware-0.1%20dev-orange)](https://github.com/OmniboxCreator/OmniBox/releases/tag/firmware-v0.1-dev)
 [![KiCad](https://img.shields.io/badge/KiCad-10-blue)](hardware/omnibox-v1/)
 [![License](https://img.shields.io/badge/license-non--commercial-red)](LICENSE.md)
 
@@ -50,8 +50,8 @@ OmniBox takes the opposite approach:
 
 | Package | Version | Link |
 |---|---:|---|
-| Hardware manufacturing package | 1.0 beta | [hardware-v1.0-beta](https://github.com/proxynet2017/OmniBox/releases/tag/hardware-v1.0-beta) |
-| Firmware source and binaries | 0.1 dev | [firmware-v0.1-dev](https://github.com/proxynet2017/OmniBox/releases/tag/firmware-v0.1-dev) |
+| Hardware manufacturing package | 1.0 beta | [hardware-v1.0-beta](https://github.com/OmniboxCreator/OmniBox/releases/tag/hardware-v1.0-beta) |
+| Firmware source and binaries | 0.1 dev | [firmware-v0.1-dev](https://github.com/OmniboxCreator/OmniBox/releases/tag/firmware-v0.1-dev) |
 
 Firmware release assets include `.elf`, `.bin`, `.hex`, `.map` and source
 archive files.
